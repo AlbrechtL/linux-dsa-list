@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DSA Feature Matrix Explorer</title>
+  <title>DSA Feature List Explorer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -14,12 +14,17 @@
   <main class="page">
     <header class="hero">
       <p class="eyebrow">Linux DSA</p>
-      <h1>Feature Matrix Explorer</h1>
+      <h1>Feature List Explorer</h1>
       <p class="subtitle">
-        Browser-only viewer for <strong>dsa_feature_matrix.csv</strong> and
-        <strong>dsa_driver_chip_list.csv</strong>.
+        <a href="https://www.kernel.org/doc/Documentation/networking/dsa/dsa.txt" target="_blank" rel="noopener noreferrer">Distributed Switch Architecture (DSA)</a>
+        is a Linux kernel framework for managing multi-port Ethernet switches.
+        This tool shows which DSA switch drivers support which kernel features.
       </p>
       <div id="meta" class="meta"></div>
+      <p class="disclaimer">
+        Data is automatically generated and may not be correct.
+        Found an issue? <a href="https://github.com/AlbrechtL/linux-dsa-list/issues" target="_blank" rel="noopener noreferrer">Report it on GitHub</a>.
+      </p>
     </header>
 
     <section class="controls" aria-label="Matrix controls">

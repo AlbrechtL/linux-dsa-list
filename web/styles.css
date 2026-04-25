@@ -79,6 +79,17 @@ h1 {
   color: var(--ink-muted);
 }
 
+.disclaimer {
+  margin: 0.8rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+
+.disclaimer a {
+  color: var(--accent, #7c9ef8);
+  text-decoration: underline;
+}
+
 .meta {
   margin-top: 0.7rem;
   display: flex;
