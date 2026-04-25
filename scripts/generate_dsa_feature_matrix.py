@@ -17,6 +17,7 @@ import argparse
 import csv
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Sequence, Set, Tuple
 
@@ -619,8 +620,23 @@ def get_openwrt_version(openwrt_root: Path) -> str:
         content = version_file.read_text(encoding="utf-8", errors="ignore").strip()
         if content:
             return content
+
+    # Fallback for archive-based OpenWrt trees without .git metadata.
+    version_mk = openwrt_root / "include" / "version.mk"
+    if version_mk.is_file():
+        text = version_mk.read_text(encoding="utf-8", errors="ignore")
+        match = re.search(r"VERSION_NUMBER:=\$\(if\s+\$\(VERSION_NUMBER\),\$\(VERSION_NUMBER\),([^\)]+)\)", text)
+        if match:
+            inferred = match.group(1).strip()
+            if inferred:
+                return inferred
     
     return "unknown"
+
+
+def current_utc_timestamp() -> str:
+    """Return an ISO-8601 UTC timestamp for metadata comments."""
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def write_csv(
@@ -632,6 +648,7 @@ def write_csv(
     linux_root: Path | None = None,
     openwrt_root: Path | None = None,
     include_openwrt: bool = False,
+    openwrt_version_override: str | None = None,
 ) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="", encoding="utf-8") as f:
@@ -643,8 +660,10 @@ def write_csv(
             writer.writerow([f"# Linux: {linux_ver}"])
         
         if include_openwrt and openwrt_root:
-            openwrt_ver = get_openwrt_version(openwrt_root)
+            openwrt_ver = openwrt_version_override or get_openwrt_version(openwrt_root)
             writer.writerow([f"# OpenWrt: {openwrt_ver}"])
+
+        writer.writerow([f"# Generated: {current_utc_timestamp()}"])
         
         # Write empty line before header
         writer.writerow([])
@@ -713,6 +732,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         action="store_true",
         help="Exclude OpenWrt patches with DO-NOT-SUBMIT in filename",
     )
+    parser.add_argument(
+        "--openwrt-version",
+        default=None,
+        help="Optional OpenWrt version string override for CSV metadata",
+    )
     return parser.parse_args(argv)
 
 
@@ -761,6 +785,7 @@ def main(argv: Sequence[str]) -> int:
         linux_root=linux_root,
         openwrt_root=openwrt_root_for_csv,
         include_openwrt=args.include_openwrt,
+        openwrt_version_override=args.openwrt_version,
     )
 
     populated = sum(

@@ -15,6 +15,7 @@ import csv
 import re
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import DefaultDict, Dict, Iterable, List, Sequence, Set, Tuple
 
@@ -215,7 +216,21 @@ def get_openwrt_version(openwrt_root: Path) -> str:
         if content:
             return content
 
+    version_mk = openwrt_root / "include" / "version.mk"
+    if version_mk.is_file():
+        text = version_mk.read_text(encoding="utf-8", errors="ignore")
+        match = re.search(r"VERSION_NUMBER:=\$\(if\s+\$\(VERSION_NUMBER\),\$\(VERSION_NUMBER\),([^\)]+)\)", text)
+        if match:
+            inferred = match.group(1).strip()
+            if inferred:
+                return inferred
+
     return "unknown"
+
+
+def current_utc_timestamp() -> str:
+    """Return an ISO-8601 UTC timestamp for metadata comments."""
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def load_driver_rows(csv_path: Path) -> Tuple[List[str], str | None, str | None]:
@@ -241,6 +256,9 @@ def load_driver_rows(csv_path: Path) -> Tuple[List[str], str | None, str | None]
 
             if first.startswith("# OpenWrt:"):
                 openwrt_version = first.split(":", 1)[1].strip()
+                continue
+
+            if first.startswith("#"):
                 continue
 
             if not header_seen:
@@ -679,6 +697,7 @@ def write_chip_csv(
             writer.writerow([f"# Linux: {linux_version}"])
         if openwrt_version:
             writer.writerow([f"# OpenWrt: {openwrt_version}"])
+        writer.writerow([f"# Generated: {current_utc_timestamp()}"])
         writer.writerow([])
         writer.writerow(["driver", "chips"])
         for driver in driver_rows:
@@ -722,6 +741,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         action="store_true",
         help="Print warnings for unresolved or ambiguous driver rows",
     )
+    parser.add_argument(
+        "--openwrt-version",
+        default=None,
+        help="Optional OpenWrt version string override for CSV metadata",
+    )
     return parser.parse_args(argv)
 
 
@@ -736,10 +760,16 @@ def main(argv: Sequence[str]) -> int:
         return 1
 
     driver_rows, csv_linux_version, csv_openwrt_version = load_driver_rows(input_csv)
+    has_openwrt_rows = any(row.startswith("openwrt:") for row in driver_rows)
     linux_version = get_linux_version(linux_root) if linux_root.is_dir() else csv_linux_version
-    openwrt_version = (
-        get_openwrt_version(openwrt_root) if openwrt_root.is_dir() else csv_openwrt_version
-    )
+    openwrt_version = None
+    if has_openwrt_rows:
+        if args.openwrt_version:
+            openwrt_version = args.openwrt_version
+        elif openwrt_root.is_dir():
+            openwrt_version = get_openwrt_version(openwrt_root)
+        else:
+            openwrt_version = csv_openwrt_version
 
     linux_entries = list(iter_linux_dsa_sources(linux_root))
     openwrt_entries = iter_openwrt_dsa_sources(openwrt_root)

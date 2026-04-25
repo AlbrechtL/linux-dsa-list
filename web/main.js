@@ -8,6 +8,7 @@ const CHIP_DELIMITER = "; ";
 const state = {
   linuxVersion: "unknown",
   openwrtVersion: "unknown",
+  generatedTag: "unknown",
   datasetOptions: [],
   selectedDatasetId: "",
   features: [],
@@ -202,6 +203,7 @@ function parseMeta(rows) {
   const meta = {
     linuxVersion: "unknown",
     openwrtVersion: "unknown",
+    generatedTag: "unknown",
   };
 
   for (const row of rows) {
@@ -211,6 +213,11 @@ function parseMeta(rows) {
     }
     if (first.startsWith("# OpenWrt:")) {
       meta.openwrtVersion = first.slice("# OpenWrt:".length).trim();
+    }
+    if (first.startsWith("# Generated:")) {
+      meta.generatedTag = first.slice("# Generated:".length).trim();
+    } else if (first === "# Generated") {
+      meta.generatedTag = "yes";
     }
   }
 
@@ -236,34 +243,76 @@ function parseFeatureMatrixRows(rows) {
     dataRows.push(row);
   }
 
-  if (!header || header[0] !== "driver") {
-    throw new Error("Feature CSV header not found or unexpected schema.");
+  if (!header) {
+    throw new Error("Feature CSV header not found.");
   }
 
-  const features = header.slice(1);
-  const records = dataRows
-    .map((row) => {
-      const driver = (row[0] || "").trim();
-      if (!driver) {
-        return null;
+  const firstColumn = header[0];
+
+  // Transposed shape: driver,feature1,feature2,...
+  if (firstColumn === "driver") {
+    const features = header.slice(1);
+    const records = dataRows
+      .map((row) => {
+        const driver = (row[0] || "").trim();
+        if (!driver) {
+          return null;
+        }
+
+        const supported = new Set();
+        for (let i = 0; i < features.length; i += 1) {
+          const cell = (row[i + 1] || "").trim().toLowerCase();
+          if (cell === "x") {
+            supported.add(features[i]);
+          }
+        }
+
+        return {
+          driver,
+          supported,
+        };
+      })
+      .filter(Boolean);
+
+    return { features, records };
+  }
+
+  // Non-transposed shape: feature,driver1,driver2,...
+  if (firstColumn === "feature") {
+    const drivers = header.slice(1).map((name) => name.trim()).filter(Boolean);
+    const driverToFeatures = new Map();
+
+    for (const driver of drivers) {
+      driverToFeatures.set(driver, new Set());
+    }
+
+    for (const row of dataRows) {
+      const feature = (row[0] || "").trim();
+      if (!feature) {
+        continue;
       }
 
-      const supported = new Set();
-      for (let i = 0; i < features.length; i += 1) {
+      for (let i = 0; i < drivers.length; i += 1) {
         const cell = (row[i + 1] || "").trim().toLowerCase();
         if (cell === "x") {
-          supported.add(features[i]);
+          driverToFeatures.get(drivers[i]).add(feature);
         }
       }
+    }
 
-      return {
-        driver,
-        supported,
-      };
-    })
-    .filter(Boolean);
+    const records = drivers.map((driver) => ({
+      driver,
+      supported: driverToFeatures.get(driver) || new Set(),
+    }));
 
-  return { features, records };
+    const features = dataRows
+      .map((row) => (row[0] || "").trim())
+      .filter(Boolean);
+
+    return { features, records };
+  }
+
+  throw new Error(`Feature CSV header not recognized: expected 'driver' or 'feature', got '${firstColumn}'.`);
 }
 
 function parseChipRows(rows) {
@@ -330,11 +379,19 @@ function renderMeta() {
   const linux = document.createElement("span");
   linux.textContent = `Linux: ${state.linuxVersion}`;
 
-  const openwrt = document.createElement("span");
-  openwrt.textContent = `OpenWrt: ${state.openwrtVersion}`;
-
   meta.appendChild(linux);
-  meta.appendChild(openwrt);
+
+  if (state.openwrtVersion !== "unknown") {
+    const openwrt = document.createElement("span");
+    openwrt.textContent = `OpenWrt: ${state.openwrtVersion}`;
+    meta.appendChild(openwrt);
+  }
+
+  if (state.generatedTag !== "unknown") {
+    const generated = document.createElement("span");
+    generated.textContent = `Generated: ${state.generatedTag}`;
+    meta.appendChild(generated);
+  }
 }
 
 function featureMatchesSearch(feature, searchTerm) {
@@ -629,6 +686,9 @@ async function loadSelectedDataset() {
   state.openwrtVersion = featureMeta.openwrtVersion !== "unknown"
     ? featureMeta.openwrtVersion
     : chipMeta.openwrtVersion;
+  state.generatedTag = featureMeta.generatedTag !== "unknown"
+    ? featureMeta.generatedTag
+    : chipMeta.generatedTag;
 
   const parsedFeature = parseFeatureMatrixRows(featureRows);
   const chipMap = parseChipRows(chipRows);
