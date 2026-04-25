@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MATRIX_GENERATOR="${REPO_ROOT}/scripts/generate_dsa_feature_matrix.py"
 CHIP_GENERATOR="${REPO_ROOT}/scripts/generate_dsa_driver_chip_list.py"
+MANIFEST_GENERATOR="${REPO_ROOT}/scripts/generate_web_dataset_manifest.py"
 
 OUTPUT_DIR="${REPO_ROOT}/data"
 CACHE_DIR="${REPO_ROOT}/.cache/kernel-archives"
@@ -305,6 +306,11 @@ run_chip_generator() {
 	fi
 
 	"${cmd[@]}"
+}
+
+run_manifest_generator() {
+	local data_dir="$1"
+	python3 "$MANIFEST_GENERATOR" --data-dir "$data_dir"
 }
 
 discover_versions() {
@@ -684,6 +690,10 @@ main() {
 		err "chip-list generator script not found: ${CHIP_GENERATOR}"
 		exit 1
 	fi
+	if [[ ! -f "$MANIFEST_GENERATOR" ]]; then
+		err "manifest generator script not found: ${MANIFEST_GENERATOR}"
+		exit 1
+	fi
 
 	mkdir -p "$OUTPUT_DIR"
 	mkdir -p "$CACHE_DIR"
@@ -733,6 +743,14 @@ main() {
 	fi
 
 	log "Completed: ${#ok_versions[@]} success, ${#failed_versions[@]} failed"
+	if [[ ${#ok_versions[@]} -gt 0 ]]; then
+		log "Generating dataset manifest ${OUTPUT_DIR}/datasets.json"
+		if ! run_manifest_generator "$OUTPUT_DIR"; then
+			err "dataset manifest generation failed"
+			exit 1
+		fi
+	fi
+
 	for version in "${ok_versions[@]}"; do
 		if [[ "$OPENWRT_RELEASES" -eq 1 ]]; then
 			printf '  OK     %s -> %s/dsa_feature_matrix_openwrt_%s.csv\n' \

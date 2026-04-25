@@ -205,13 +205,21 @@ The viewer first tries to load CSV files from repository root:
 - `../dsa_feature_matrix.csv`
 - `../dsa_driver_chip_list.csv`
 
-and falls back to optional `web/data/*.csv` copies if present.
+For versioned datasets, the viewer reads `data/datasets.json` first and only
+falls back to HTML directory listing when no manifest is present. This avoids
+web-server-specific directory index requirements such as nginx `autoindex on`.
 
 ### Update workflow
 
 1. Regenerate or replace `dsa_feature_matrix.csv`.
 2. Regenerate or replace `dsa_driver_chip_list.csv`.
-3. Refresh the browser page.
+3. Regenerate `data/datasets.json` if you changed versioned files manually:
+
+```bash
+python scripts/generate_web_dataset_manifest.py --data-dir ./data
+```
+
+4. Refresh the browser page.
 
 No HTML/JavaScript code changes are required if the CSV schema remains:
 

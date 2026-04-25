@@ -3,6 +3,8 @@ const DATA_DIR_CANDIDATES = [
   "./data/",
 ];
 
+const DATASET_MANIFEST_NAME = "datasets.json";
+
 const CHIP_DELIMITER = "; ";
 
 const state = {
@@ -106,7 +108,60 @@ async function fetchDirectoryListing(path) {
   }
 }
 
+async function fetchDatasetManifest(path) {
+  try {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    if (!payload || !Array.isArray(payload.datasets)) {
+      return null;
+    }
+
+    return payload.datasets;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeManifestDatasets(dir, datasets) {
+  const options = [];
+
+  for (const entry of datasets) {
+    const id = String(entry?.id || "").trim();
+    const featureName = String(entry?.feature || "").trim();
+    const chipName = String(entry?.chip || "").trim();
+    if (!id || !featureName || !chipName) {
+      continue;
+    }
+
+    options.push({
+      id,
+      label: String(entry?.label || datasetLabelFromId(id)),
+      featureCandidates: [`${dir}${featureName}`],
+      chipCandidates: [`${dir}${chipName}`],
+    });
+  }
+
+  options.sort((a, b) => compareDatasetIds(a.id, b.id));
+  return options;
+}
+
 async function discoverVersionedDatasets() {
+  for (const dir of DATA_DIR_CANDIDATES) {
+    const manifest = await fetchDatasetManifest(`${dir}${DATASET_MANIFEST_NAME}`);
+    if (!manifest) {
+      continue;
+    }
+
+    const options = normalizeManifestDatasets(dir, manifest);
+    if (options.length) {
+      return options;
+    }
+  }
+
   const options = [];
 
   for (const dir of DATA_DIR_CANDIDATES) {
@@ -710,7 +765,7 @@ async function boot() {
   state.datasetOptions = discovered;
 
   if (!state.datasetOptions.length) {
-    throw new Error("No versioned dataset pairs found under data/. Generate versioned CSV files first.");
+    throw new Error("No versioned dataset pairs found under data/. Generate the CSV files and data/datasets.json first.");
   }
 
   if (!requestedDataset && discovered.length) {

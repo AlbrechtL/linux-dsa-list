@@ -1,0 +1,106 @@
+{
+  "datasets": [
+    {
+      "id": "linux_7.0",
+      "label": "Linux 7.0",
+      "feature": "dsa_feature_matrix_linux_7.0.csv",
+      "chip": "dsa_driver_chip_list_linux_7.0.csv"
+    },
+    {
+      "id": "linux_6.19",
+      "label": "Linux 6.19",
+      "feature": "dsa_feature_matrix_linux_6.19.csv",
+      "chip": "dsa_driver_chip_list_linux_6.19.csv"
+    },
+    {
+      "id": "linux_6.18",
+      "label": "Linux 6.18",
+      "feature": "dsa_feature_matrix_linux_6.18.csv",
+      "chip": "dsa_driver_chip_list_linux_6.18.csv"
+    },
+    {
+      "id": "linux_6.17",
+      "label": "Linux 6.17",
+      "feature": "dsa_feature_matrix_linux_6.17.csv",
+      "chip": "dsa_driver_chip_list_linux_6.17.csv"
+    },
+    {
+      "id": "linux_6.16",
+      "label": "Linux 6.16",
+      "feature": "dsa_feature_matrix_linux_6.16.csv",
+      "chip": "dsa_driver_chip_list_linux_6.16.csv"
+    },
+    {
+      "id": "linux_6.15",
+      "label": "Linux 6.15",
+      "feature": "dsa_feature_matrix_linux_6.15.csv",
+      "chip": "dsa_driver_chip_list_linux_6.15.csv"
+    },
+    {
+      "id": "linux_6.14",
+      "label": "Linux 6.14",
+      "feature": "dsa_feature_matrix_linux_6.14.csv",
+      "chip": "dsa_driver_chip_list_linux_6.14.csv"
+    },
+    {
+      "id": "linux_6.13",
+      "label": "Linux 6.13",
+      "feature": "dsa_feature_matrix_linux_6.13.csv",
+      "chip": "dsa_driver_chip_list_linux_6.13.csv"
+    },
+    {
+      "id": "linux_6.12",
+      "label": "Linux 6.12",
+      "feature": "dsa_feature_matrix_linux_6.12.csv",
+      "chip": "dsa_driver_chip_list_linux_6.12.csv"
+    },
+    {
+      "id": "linux_6.11",
+      "label": "Linux 6.11",
+      "feature": "dsa_feature_matrix_linux_6.11.csv",
+      "chip": "dsa_driver_chip_list_linux_6.11.csv"
+    },
+    {
+      "id": "linux_6.10",
+      "label": "Linux 6.10",
+      "feature": "dsa_feature_matrix_linux_6.10.csv",
+      "chip": "dsa_driver_chip_list_linux_6.10.csv"
+    },
+    {
+      "id": "linux_6.9",
+      "label": "Linux 6.9",
+      "feature": "dsa_feature_matrix_linux_6.9.csv",
+      "chip": "dsa_driver_chip_list_linux_6.9.csv"
+    },
+    {
+      "id": "linux_6.8",
+      "label": "Linux 6.8",
+      "feature": "dsa_feature_matrix_linux_6.8.csv",
+      "chip": "dsa_driver_chip_list_linux_6.8.csv"
+    },
+    {
+      "id": "openwrt_snapshot",
+      "label": "OpenWrt snapshot",
+      "feature": "dsa_feature_matrix_openwrt_snapshot.csv",
+      "chip": "dsa_driver_chip_list_openwrt_snapshot.csv"
+    },
+    {
+      "id": "openwrt_25.12",
+      "label": "OpenWrt 25.12",
+      "feature": "dsa_feature_matrix_openwrt_25.12.csv",
+      "chip": "dsa_driver_chip_list_openwrt_25.12.csv"
+    },
+    {
+      "id": "openwrt_24.10",
+      "label": "OpenWrt 24.10",
+      "feature": "dsa_feature_matrix_openwrt_24.10.csv",
+      "chip": "dsa_driver_chip_list_openwrt_24.10.csv"
+    },
+    {
+      "id": "openwrt_23.05",
+      "label": "OpenWrt 23.05",
+      "feature": "dsa_feature_matrix_openwrt_23.05.csv",
+      "chip": "dsa_driver_chip_list_openwrt_23.05.csv"
+    }
+  ]
+}
