@@ -11,11 +11,15 @@ an `openwrt:` prefix in the matrix.
 The generator marks a feature as supported (`x`) when a driver initializes the
 corresponding callback in its `struct dsa_switch_ops` initializer.
 
+The repository also includes a second generator that consumes the transposed
+feature matrix and writes one chip-list row per driver.
+
 ## Generator
 
 Script:
 
 - `scripts/generate_dsa_feature_matrix.py`
+- `scripts/generate_dsa_driver_chip_list.py`
 
 The script uses Python standard-library parsing only (no shell commands invoked
 inside the Python code).
@@ -60,6 +64,30 @@ python scripts/generate_dsa_feature_matrix.py \
 	--transpose
 ```
 
+### Generate a chip-list CSV per driver
+
+The chip-list generator expects a transposed input CSV whose first column is
+`driver`, like `dsa_feature_matrix.csv` in this repository.
+
+```bash
+python scripts/generate_dsa_driver_chip_list.py \
+	--input-csv dsa_feature_matrix.csv \
+	--linux-root linux \
+	--openwrt-root openwrt \
+	--out dsa_driver_chip_list.csv
+```
+
+It resolves each driver row back to Linux or OpenWrt source files and extracts
+chip names from chip tables, device-tree match tables, bus-specific device IDs,
+and chip-ID macros. The output schema is:
+
+```text
+driver,chips
+```
+
+The `chips` field is a single CSV cell containing a delimiter-separated list of
+chip names.
+
 ## Arguments
 
 - `--linux-root`: path to Linux source tree root (default: `./linux`)
@@ -76,6 +104,15 @@ python scripts/generate_dsa_feature_matrix.py \
 - `--openwrt-root`: path to OpenWrt source tree root (default: `./openwrt`)
 - `--openwrt-exclude-do-not-submit`: exclude patch files containing
 	`DO-NOT-SUBMIT` in filename
+
+Chip-list generator arguments:
+
+- `--input-csv`: transposed driver-first feature matrix to consume
+- `--linux-root`: path to Linux source tree root (default: `./linux`)
+- `--openwrt-root`: path to OpenWrt source tree root (default: `./openwrt`)
+- `--out`: output CSV path (default: `./dsa_driver_chip_list.csv`)
+- `--chip-delimiter`: delimiter used inside the `chips` field
+- `--warn-unresolved`: print warnings for unresolved or ambiguous rows
 
 ## Disclaimer
 
