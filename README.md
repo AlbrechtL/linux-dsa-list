@@ -88,6 +88,51 @@ driver,chips
 The `chips` field is a single CSV cell containing a delimiter-separated list of
 chip names.
 
+## Browser Viewer
+
+The repository includes a static browser-only viewer at `web/index.html`.
+It loads both CSV files in the browser and renders a filterable driver-feature
+matrix with an additional chips column.
+
+### What it does
+
+- consumes `dsa_feature_matrix.csv` (drivers as rows)
+- consumes `dsa_driver_chip_list.csv` (chips per driver)
+- joins both by the `driver` column
+- supports feature filters (multi-select, match all selected features)
+- keeps all data processing in client-side JavaScript (no backend)
+
+### Run locally
+
+From repository root:
+
+```bash
+python -m http.server 8000
+```
+
+Then open:
+
+- `http://localhost:8000/web/`
+
+The viewer first tries to load CSV files from repository root:
+
+- `../dsa_feature_matrix.csv`
+- `../dsa_driver_chip_list.csv`
+
+and falls back to optional `web/data/*.csv` copies if present.
+
+### Update workflow
+
+1. Regenerate or replace `dsa_feature_matrix.csv`.
+2. Regenerate or replace `dsa_driver_chip_list.csv`.
+3. Refresh the browser page.
+
+No HTML/JavaScript code changes are required if the CSV schema remains:
+
+- feature matrix header starts with `driver`
+- chip list header is `driver,chips`
+- support cells are `x` (supported) or empty
+
 ## Arguments
 
 - `--linux-root`: path to Linux source tree root (default: `./linux`)

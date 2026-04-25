@@ -1,0 +1,332 @@
+:root {
+  --bg-top: #f5f0e6;
+  --bg-mid: #e6efe8;
+  --bg-bottom: #d9e7f7;
+  --ink: #192224;
+  --ink-muted: #4b5a5f;
+  --surface: #fcfcfb;
+  --surface-strong: #eef2f0;
+  --line: #c6d0d4;
+  --accent: #0f766e;
+  --accent-soft: #daf2ef;
+  --ok: #0f5132;
+  --ok-soft: #d3f2de;
+  --warn: #8b3d00;
+  --shadow: 0 16px 42px rgba(15, 32, 36, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 52%, var(--bg-bottom) 100%);
+  overflow: hidden;
+}
+
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 183, 77, 0.28), transparent 34%),
+    radial-gradient(circle at 86% 8%, rgba(15, 118, 110, 0.2), transparent 32%),
+    radial-gradient(circle at 78% 78%, rgba(33, 99, 170, 0.18), transparent 40%);
+}
+
+.page {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  padding: 0.8rem 0.8rem 1rem;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.hero {
+  grid-column: 1 / -1;
+  background: rgba(252, 252, 251, 0.92);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: 18px;
+  padding: 1rem 1.2rem;
+  animation: slideIn 600ms ease-out;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+}
+
+h1 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.3rem, 2vw + 0.8rem, 2rem);
+}
+
+.subtitle {
+  margin: 0.4rem 0 0;
+  color: var(--ink-muted);
+}
+
+.meta {
+  margin-top: 0.7rem;
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.78rem;
+}
+
+.meta span {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+}
+
+.controls {
+  grid-column: 1;
+  min-height: 0;
+  overflow: auto;
+  background: rgba(252, 252, 251, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 0.9rem 1.1rem;
+  display: grid;
+  gap: 0.7rem;
+  animation: slideIn 720ms ease-out;
+}
+
+.control-group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+label {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+input[type="search"],
+select,
+button {
+  font: inherit;
+}
+
+input[type="search"],
+select {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+}
+
+select {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  min-height: 11rem;
+}
+
+.help {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+.control-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+button {
+  border: 1px solid #0d625c;
+  background: var(--accent);
+  color: #f8fffd;
+  border-radius: 999px;
+  padding: 0.44rem 0.9rem;
+  cursor: pointer;
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.stats {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+
+.status {
+  min-height: 1.2rem;
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.table-wrap {
+  grid-column: 2;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  background: rgba(252, 252, 251, 0.96);
+  animation: slideIn 860ms ease-out;
+  min-height: 0;
+}
+
+#matrix-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #dae7de;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 0.45rem 0.5rem;
+  font-size: 0.78rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+thead th:first-child,
+thead th:nth-child(2) {
+  z-index: 3;
+}
+
+tbody td,
+tbody th {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 0.35rem 0.45rem;
+  vertical-align: top;
+  background: rgba(252, 252, 251, 0.98);
+}
+
+tbody tr:nth-child(odd) td,
+tbody tr:nth-child(odd) th {
+  background: #f5f8f6;
+}
+
+tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 260px;
+  max-width: 360px;
+  background: #ebf2ee;
+  font-size: 0.78rem;
+  text-align: left;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  word-break: break-word;
+}
+
+tbody td.chips-cell {
+  position: sticky;
+  left: 260px;
+  z-index: 1;
+  min-width: 260px;
+  max-width: 420px;
+  background: #edf4f5;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.24rem;
+}
+
+.chip {
+  border-radius: 999px;
+  border: 1px solid #aaccc5;
+  background: var(--accent-soft);
+  color: #114540;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.42rem;
+  white-space: nowrap;
+}
+
+.missing-chip {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
+.feature-cell {
+  min-width: 1.9rem;
+  text-align: center;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+}
+
+.feature-cell.supported {
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-weight: 700;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  body {
+    overflow: auto;
+  }
+
+  .page {
+    margin-top: 0;
+    padding-top: 0.5rem;
+    height: auto;
+    min-height: 100dvh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto minmax(300px, 1fr);
+  }
+
+  .hero,
+  .controls,
+  .table-wrap {
+    grid-column: 1;
+  }
+
+  .hero,
+  .controls,
+  .table-wrap {
+    border-radius: 14px;
+  }
+
+  tbody th {
+    min-width: 210px;
+  }
+
+  tbody td.chips-cell {
+    left: 210px;
+    min-width: 220px;
+  }
+}
