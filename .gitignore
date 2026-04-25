@@ -3,3 +3,4 @@ linux/
 openwrt/
 */__pycache__/
 #*.csv
+.cache

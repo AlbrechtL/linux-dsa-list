@@ -38,7 +38,7 @@ From repository root:
 ```bash
 python scripts/generate_dsa_feature_matrix.py \
 	--linux-root linux \
-	--out dsa_feature_matrix.csv \
+	--out ./data/dsa_feature_matrix.csv \
 	--column-mode relative
 ```
 
@@ -47,7 +47,7 @@ python scripts/generate_dsa_feature_matrix.py \
 ```bash
 python scripts/generate_dsa_feature_matrix.py \
 	--linux-root linux \
-	--out dsa_feature_matrix.csv \
+	--out ./data/dsa_feature_matrix.csv \
 	--column-mode relative \
 	--transpose
 ```
@@ -59,7 +59,7 @@ python scripts/generate_dsa_feature_matrix.py \
 	--linux-root linux \
 	--include-openwrt \
 	--openwrt-root openwrt \
-	--out dsa_feature_matrix_openwrt.csv \
+	--out ./data/dsa_feature_matrix_openwrt.csv \
 	--column-mode relative \
 	--transpose
 ```
@@ -71,10 +71,10 @@ The chip-list generator expects a transposed input CSV whose first column is
 
 ```bash
 python scripts/generate_dsa_driver_chip_list.py \
-	--input-csv dsa_feature_matrix.csv \
+	--input-csv ./data/dsa_feature_matrix.csv \
 	--linux-root linux \
 	--openwrt-root openwrt \
-	--out dsa_driver_chip_list.csv
+	--out ./data/dsa_driver_chip_list.csv
 ```
 
 It resolves each driver row back to Linux or OpenWrt source files and extracts
@@ -87,6 +87,45 @@ driver,chips
 
 The `chips` field is a single CSV cell containing a delimiter-separated list of
 chip names.
+
+### Generate per-version matrix and chip-list files (6.8 to 7.0)
+
+Use the wrapper script to download Linux source archives, generate one feature
+matrix CSV and one driver chip-list CSV per minor line from 6.8 through 7.0,
+and clean up extracted source trees.
+
+```bash
+scripts/generate_dsa_versioned_reports.sh
+```
+
+By default, generated files are written to:
+
+```text
+out/matrices/dsa_feature_matrix_linux_<version>.csv
+out/matrices/dsa_driver_chip_list_linux_<version>.csv
+```
+
+Examples:
+
+```bash
+# Generate drivers-as-rows matrix output for each version
+scripts/generate_dsa_versioned_reports.sh --transpose --output-dir ./data
+
+# Process only a specific kernel version
+scripts/generate_dsa_versioned_reports.sh --version 6.8 --output-dir ./data
+
+# Process versions from 6.10 through 6.15
+scripts/generate_dsa_versioned_reports.sh --from 6.10 --to 6.15 --output-dir ./data
+
+# Keep output in a custom directory
+scripts/generate_dsa_versioned_reports.sh --output-dir ./data
+
+# Delete downloaded archives after each run
+scripts/generate_dsa_versioned_reports.sh --no-cache --output-dir ./data
+
+# Pass unresolved-row warnings to chip-list generation
+scripts/generate_dsa_versioned_reports.sh --warn-unresolved-chips --output-dir ./data
+```
 
 ## Browser Viewer
 
