@@ -1,6 +1,14 @@
 # linux-dsa-list
 
-Generate a CSV overview of Linux DSA driver feature support by parsing:
+Hosted viewer: https://linux-dsa-list.albrechtloh.de/
+
+This repository provides a toolset for getting an overview of Linux DSA
+support: which DSA features are implemented by each driver, and which chips are
+handled by those drivers. It includes the parser scripts used to build the
+datasets, the generated versioned CSV reports, and a static browser viewer for
+exploring Linux and OpenWrt DSA support.
+
+The feature-matrix generator builds the driver-feature overview by parsing:
 
 - `linux/include/net/dsa.h` for `struct dsa_switch_ops` feature definitions
 - `linux/drivers/net/dsa/**/*.c` for driver `dsa_switch_ops` initializers
@@ -12,7 +20,8 @@ The generator marks a feature as supported (`x`) when a driver initializes the
 corresponding callback in its `struct dsa_switch_ops` initializer.
 
 The repository also includes a second generator that consumes the transposed
-feature matrix and writes one chip-list row per driver.
+feature matrix and writes one chip-list row per driver, so the resulting data
+shows both driver capabilities and driver-to-chip coverage.
 
 ## Generator
 
