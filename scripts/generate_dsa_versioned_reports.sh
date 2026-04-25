@@ -14,7 +14,6 @@ OUTPUT_DIR="${REPO_ROOT}/data"
 CACHE_DIR="${REPO_ROOT}/.cache/kernel-archives"
 KEEP_ARCHIVES=1
 STOP_ON_ERROR=0
-TRANSPOSE=0
 WARN_UNRESOLVED_CHIPS=0
 CHIP_DELIMITER='; '
 OPENWRT_RELEASES=0
@@ -51,7 +50,6 @@ Options:
                            Default: ./.cache/kernel-archives
   --no-cache               Delete archives after each successful version run.
   --stop-on-error          Stop immediately when one version fails.
-  --transpose              Generate transposed matrix CSV (drivers as rows).
   --warn-unresolved-chips  Pass --warn-unresolved to chip-list generator.
   --chip-delimiter TEXT    Delimiter inside chips cell. Default: '; '
   -h, --help               Show this help.
@@ -262,10 +260,9 @@ detect_openwrt_kernel_version() {
 run_matrix_generator() {
 	local linux_root="$1"
 	local out_csv="$2"
-	local transpose="$3"
-	local include_openwrt="${4:-0}"
-	local openwrt_root="${5:-}"
-	local openwrt_version="${6:-}"
+	local include_openwrt="${3:-0}"
+	local openwrt_root="${4:-}"
+	local openwrt_version="${5:-}"
 	local -a cmd=(
 		python3 "$MATRIX_GENERATOR"
 		--linux-root "$linux_root"
@@ -273,9 +270,6 @@ run_matrix_generator() {
 		--column-mode relative
 	)
 
-	if [[ "$transpose" -eq 1 ]]; then
-		cmd+=(--transpose)
-	fi
 	if [[ "$include_openwrt" -eq 1 ]]; then
 		cmd+=(--include-openwrt --openwrt-root "$openwrt_root")
 		if [[ -n "$openwrt_version" ]]; then
@@ -400,7 +394,7 @@ find_extracted_root() {
 process_version() {
 	local version="$1"
 	local archive_ext archive_url archive_name archive_path
-	local work_dir linux_root matrix_csv chip_csv chip_input_csv temp_transposed_csv
+	local work_dir linux_root matrix_csv chip_csv chip_input_csv
 
 	archive_ext="$(choose_archive_format "$version")" || {
 		err "could not find archive format for ${version}"
@@ -445,23 +439,13 @@ process_version() {
 	chip_csv="${OUTPUT_DIR}/dsa_driver_chip_list_linux_${version}.csv"
 	log "Generating ${matrix_csv}"
 
-	if ! run_matrix_generator "$linux_root" "$matrix_csv" "$TRANSPOSE"; then
+	if ! run_matrix_generator "$linux_root" "$matrix_csv"; then
 		err "feature matrix generation failed for ${version}"
 		rm -rf "$work_dir"
 		return 1
 	fi
 
 	chip_input_csv="$matrix_csv"
-	if [[ "$TRANSPOSE" -ne 1 ]]; then
-		temp_transposed_csv="${work_dir}/dsa_feature_matrix_linux_${version}_transpose.csv"
-		log "Generating temporary transposed matrix for chip extraction"
-		if ! run_matrix_generator "$linux_root" "$temp_transposed_csv" 1; then
-			err "temporary transposed matrix generation failed for ${version}"
-			rm -rf "$work_dir"
-			return 1
-		fi
-		chip_input_csv="$temp_transposed_csv"
-	fi
 
 	log "Generating ${chip_csv}"
 	if ! run_chip_generator "$linux_root" "$chip_input_csv" "$chip_csv"; then
@@ -488,7 +472,7 @@ process_openwrt_release_line() {
 	local openwrt_work_dir openwrt_root
 	local linux_version linux_archive_ext linux_archive_name linux_archive_url linux_archive_path
 	local linux_work_dir linux_root
-	local matrix_csv chip_csv chip_input_csv temp_transposed_csv
+	local matrix_csv chip_csv chip_input_csv
 
 	openwrt_archive_name="openwrt-${label}.tar.gz"
 	openwrt_archive_url="https://github.com/openwrt/openwrt/archive/refs/heads/${branch}.tar.gz"
@@ -562,23 +546,13 @@ process_openwrt_release_line() {
 	chip_csv="${OUTPUT_DIR}/dsa_driver_chip_list_openwrt_${label}.csv"
 	log "Generating ${matrix_csv} (OpenWrt ${label} + Linux ${linux_version})"
 
-	if ! run_matrix_generator "$linux_root" "$matrix_csv" "$TRANSPOSE" 1 "$openwrt_root" "$openwrt_version_meta"; then
+	if ! run_matrix_generator "$linux_root" "$matrix_csv" 1 "$openwrt_root" "$openwrt_version_meta"; then
 		err "feature matrix generation failed for OpenWrt ${label}"
 		rm -rf "$openwrt_work_dir" "$linux_work_dir"
 		return 1
 	fi
 
 	chip_input_csv="$matrix_csv"
-	if [[ "$TRANSPOSE" -ne 1 ]]; then
-		temp_transposed_csv="${linux_work_dir}/dsa_feature_matrix_openwrt_${label}_transpose.csv"
-		log "Generating temporary transposed matrix for chip extraction"
-		if ! run_matrix_generator "$linux_root" "$temp_transposed_csv" 1 1 "$openwrt_root" "$openwrt_version_meta"; then
-			err "temporary transposed matrix generation failed for OpenWrt ${label}"
-			rm -rf "$openwrt_work_dir" "$linux_work_dir"
-			return 1
-		fi
-		chip_input_csv="$temp_transposed_csv"
-	fi
 
 	log "Generating ${chip_csv}"
 	if ! run_chip_generator "$linux_root" "$chip_input_csv" "$chip_csv" "$openwrt_root" "$openwrt_version_meta"; then
@@ -649,10 +623,6 @@ main() {
 				;;
 			--stop-on-error)
 				STOP_ON_ERROR=1
-				shift
-				;;
-			--transpose)
-				TRANSPOSE=1
 				shift
 				;;
 			--warn-unresolved-chips)

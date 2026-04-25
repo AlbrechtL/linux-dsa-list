@@ -644,7 +644,6 @@ def write_csv(
     features: Sequence[str],
     columns: Sequence[str],
     feature_map: Dict[str, Set[str]],
-    transpose: bool = False,
     linux_root: Path | None = None,
     openwrt_root: Path | None = None,
     include_openwrt: bool = False,
@@ -667,15 +666,6 @@ def write_csv(
         
         # Write empty line before header
         writer.writerow([])
-        
-        if not transpose:
-            writer.writerow(["feature", *columns])
-            for feat in features:
-                row = [feat]
-                for col in columns:
-                    row.append("x" if feat in feature_map.get(col, set()) else "")
-                writer.writerow(row)
-            return
 
         writer.writerow(["driver", *features])
         for col in columns:
@@ -710,11 +700,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "--warn-unknown-designators",
         action="store_true",
         help="Print designators found in ops initializers but absent from dsa_switch_ops",
-    )
-    parser.add_argument(
-        "--transpose",
-        action="store_true",
-        help="Swap matrix axes: rows become drivers, columns become features",
     )
     parser.add_argument(
         "--include-openwrt",
@@ -781,7 +766,6 @@ def main(argv: Sequence[str]) -> int:
         features,
         columns,
         feature_map,
-        transpose=args.transpose,
         linux_root=linux_root,
         openwrt_root=openwrt_root_for_csv,
         include_openwrt=args.include_openwrt,

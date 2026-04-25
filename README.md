@@ -42,14 +42,13 @@ python scripts/generate_dsa_feature_matrix.py \
 	--column-mode relative
 ```
 
-### Swap rows and columns (drivers as rows)
+### Default output (drivers as rows)
 
 ```bash
 python scripts/generate_dsa_feature_matrix.py \
 	--linux-root linux \
 	--out dsa_feature_matrix.csv \
-	--column-mode relative \
-	--transpose
+	--column-mode relative
 ```
 
 ### Include OpenWrt-patched and OpenWrt-only DSA drivers
@@ -60,8 +59,7 @@ python scripts/generate_dsa_feature_matrix.py \
 	--include-openwrt \
 	--openwrt-root openwrt \
 	--out dsa_feature_matrix_openwrt.csv \
-	--column-mode relative \
-	--transpose
+	--column-mode relative
 ```
 
 ### Generate a chip-list CSV per driver
@@ -109,7 +107,7 @@ Examples:
 
 ```bash
 # Generate drivers-as-rows matrix output for each version
-scripts/generate_dsa_versioned_reports.sh --transpose --output-dir ./data
+scripts/generate_dsa_versioned_reports.sh --output-dir ./data
 
 # Process only a specific kernel version
 scripts/generate_dsa_versioned_reports.sh --version 6.8 --output-dir ./data
@@ -140,7 +138,6 @@ scripts/generate_dsa_versioned_reports.sh \
 	--openwrt-releases \
 	--openwrt-from 23.05 \
 	--openwrt-to latest \
-	--transpose \
 	--output-dir ./data
 
 # Process only one OpenWrt release line
@@ -168,7 +165,6 @@ OpenWrt repository. Outputs are written with the `snapshot` suffix.
 # Process OpenWrt main branch (drivers as rows)
 scripts/generate_dsa_versioned_reports.sh \
 	--openwrt-snapshot \
-	--transpose \
 	--output-dir ./data
 
 # Delete the downloaded snapshot archive after the run (always fresh on next run)
@@ -231,7 +227,6 @@ No HTML/JavaScript code changes are required if the CSV schema remains:
 	- `relative`: `drivers/net/dsa/...` path
 	- `basename`: filename only
 	- `ops-symbol`: `relative_path:ops_symbol`
-- `--transpose`: swap matrix axes (rows become drivers, columns become features)
 - `--warn-unknown-designators`: report initializer designators not found in
 	`struct dsa_switch_ops`
 - `--include-openwrt`: include OpenWrt DSA drivers parsed from OpenWrt kernel
@@ -262,7 +257,6 @@ Versioned wrapper script arguments:
 - `--cache-dir`: archive cache directory (default: `./.cache/kernel-archives`)
 - `--no-cache`: delete downloaded archives after each successful run
 - `--stop-on-error`: stop immediately after the first failed version
-- `--transpose`: generate drivers-as-rows matrix output
 - `--warn-unresolved-chips`: pass unresolved warnings to chip-list generation
 - `--chip-delimiter`: delimiter used inside the chip list cell
 
