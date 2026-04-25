@@ -1,11 +1,6 @@
-const FEATURE_CSV_CANDIDATES = [
-  "../dsa_feature_matrix.csv",
-  "./data/dsa_feature_matrix.csv",
-];
-
-const CHIP_CSV_CANDIDATES = [
-  "../dsa_driver_chip_list.csv",
-  "./data/dsa_driver_chip_list.csv",
+const DATA_DIR_CANDIDATES = [
+  "../data/",
+  "./data/",
 ];
 
 const CHIP_DELIMITER = "; ";
@@ -13,11 +8,150 @@ const CHIP_DELIMITER = "; ";
 const state = {
   linuxVersion: "unknown",
   openwrtVersion: "unknown",
+  datasetOptions: [],
+  selectedDatasetId: "",
   features: [],
   records: [],
   searchTerm: "",
   selectedFeatures: new Set(),
 };
+
+function parseVersionTuple(text) {
+  const match = String(text || "").match(/^(\d+)\.(\d+)$/);
+  if (!match) {
+    return null;
+  }
+  return [Number(match[1]), Number(match[2])];
+}
+
+function compareVersionStringsDesc(a, b) {
+  const pa = parseVersionTuple(a);
+  const pb = parseVersionTuple(b);
+  if (pa && pb) {
+    if (pa[0] !== pb[0]) {
+      return pb[0] - pa[0];
+    }
+    return pb[1] - pa[1];
+  }
+  return String(b).localeCompare(String(a));
+}
+
+function compareDatasetIds(a, b) {
+  const aLinux = a.startsWith("linux_");
+  const bLinux = b.startsWith("linux_");
+  if (aLinux && !bLinux) {
+    return -1;
+  }
+  if (!aLinux && bLinux) {
+    return 1;
+  }
+
+  const aSnapshot = a.endsWith("_snapshot") || a === "snapshot";
+  const bSnapshot = b.endsWith("_snapshot") || b === "snapshot";
+  if (aSnapshot && !bSnapshot) {
+    return -1;
+  }
+  if (!aSnapshot && bSnapshot) {
+    return 1;
+  }
+
+  const aVer = a.includes("_") ? a.slice(a.indexOf("_") + 1) : a;
+  const bVer = b.includes("_") ? b.slice(b.indexOf("_") + 1) : b;
+  return compareVersionStringsDesc(aVer, bVer);
+}
+
+function datasetLabelFromId(id) {
+  if (id.startsWith("linux_")) {
+    return `Linux ${id.slice("linux_".length)}`;
+  }
+  if (id.startsWith("openwrt_")) {
+    return `OpenWrt ${id.slice("openwrt_".length)}`;
+  }
+  return id;
+}
+
+function extractHrefTargets(htmlText) {
+  const targets = [];
+  const regex = /href\s*=\s*"([^"]+)"/gi;
+  let match = regex.exec(htmlText);
+  while (match) {
+    targets.push(match[1]);
+    match = regex.exec(htmlText);
+  }
+  return targets;
+}
+
+function normalizeHrefToName(href) {
+  const raw = decodeURIComponent(String(href || ""));
+  const noFragment = raw.split("#")[0];
+  const noQuery = noFragment.split("?")[0];
+  const trimmed = noQuery.replace(/\/+$/, "");
+  if (!trimmed) {
+    return "";
+  }
+  const parts = trimmed.split("/");
+  return parts[parts.length - 1] || "";
+}
+
+async function fetchDirectoryListing(path) {
+  try {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return await response.text();
+  } catch {
+    return null;
+  }
+}
+
+async function discoverVersionedDatasets() {
+  const options = [];
+
+  for (const dir of DATA_DIR_CANDIDATES) {
+    const listingText = await fetchDirectoryListing(dir);
+    if (!listingText) {
+      continue;
+    }
+
+    const names = new Set(extractHrefTargets(listingText).map(normalizeHrefToName).filter(Boolean));
+    const featureSuffixToName = new Map();
+    const chipSuffixToName = new Map();
+
+    for (const name of names) {
+      const featureMatch = name.match(/^dsa_feature_matrix_(.+)\.csv$/);
+      if (featureMatch) {
+        featureSuffixToName.set(featureMatch[1], name);
+      }
+
+      const chipMatch = name.match(/^dsa_driver_chip_list_(.+)\.csv$/);
+      if (chipMatch) {
+        chipSuffixToName.set(chipMatch[1], name);
+      }
+    }
+
+    for (const [suffix, featureName] of featureSuffixToName.entries()) {
+      const chipName = chipSuffixToName.get(suffix);
+      if (!chipName) {
+        continue;
+      }
+
+      options.push({
+        id: suffix,
+        label: datasetLabelFromId(suffix),
+        featureCandidates: [`${dir}${featureName}`],
+        chipCandidates: [`${dir}${chipName}`],
+      });
+    }
+
+    if (options.length) {
+      break;
+    }
+  }
+
+  options.sort((a, b) => compareDatasetIds(a.id, b.id));
+  return options;
+}
 
 function splitCsvLine(line) {
   const cells = [];
@@ -223,6 +357,19 @@ function getSelectedFeaturesFromUi() {
   return values;
 }
 
+function renderDatasetSelect() {
+  const select = document.getElementById("dataset-select");
+  select.textContent = "";
+
+  for (const dataset of state.datasetOptions) {
+    const option = document.createElement("option");
+    option.value = dataset.id;
+    option.textContent = dataset.label;
+    option.selected = dataset.id === state.selectedDatasetId;
+    select.appendChild(option);
+  }
+}
+
 function renderFeatureSelect() {
   const select = document.getElementById("feature-select");
   const prevSelected = new Set(state.selectedFeatures);
@@ -259,6 +406,12 @@ function updateUrlQuery() {
   const params = new URLSearchParams(window.location.search);
   const features = Array.from(state.selectedFeatures).sort();
 
+  if (state.selectedDatasetId) {
+    params.set("dataset", state.selectedDatasetId);
+  } else {
+    params.delete("dataset");
+  }
+
   if (features.length) {
     params.set("features", features.join(","));
   } else {
@@ -278,8 +431,11 @@ function updateUrlQuery() {
 
 function applyQueryToState() {
   const params = new URLSearchParams(window.location.search);
+  const dataset = (params.get("dataset") || "").trim();
   const featureParam = (params.get("features") || "").trim();
   const query = (params.get("q") || "").trim();
+
+  state.selectedDatasetId = dataset;
 
   state.selectedFeatures.clear();
   if (featureParam) {
@@ -390,9 +546,24 @@ function syncUiFromState() {
 }
 
 function registerEvents() {
+  const datasetSelect = document.getElementById("dataset-select");
   const searchInput = document.getElementById("feature-search");
   const featureSelect = document.getElementById("feature-select");
   const clearButton = document.getElementById("clear-filters");
+
+  datasetSelect.addEventListener("change", async () => {
+    state.selectedDatasetId = datasetSelect.value;
+    updateUrlQuery();
+    try {
+      await loadSelectedDataset();
+      renderMeta();
+      syncUiFromState();
+      renderTable();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(message, true);
+    }
+  });
 
   searchInput.addEventListener("input", () => {
     state.searchTerm = searchInput.value;
@@ -427,12 +598,23 @@ function mergeRecords(featureRecords, chipMap) {
   return merged;
 }
 
-async function boot() {
-  setStatus("Loading CSV files...");
+async function loadSelectedDataset() {
+  const selected = state.datasetOptions.find((item) => item.id === state.selectedDatasetId) || state.datasetOptions[0];
+  if (!selected) {
+    throw new Error("No dataset options available.");
+  }
+
+  state.selectedDatasetId = selected.id;
+  renderDatasetSelect();
+
+  const featureCandidates = selected.featureCandidates;
+  const chipCandidates = selected.chipCandidates;
+
+  setStatus(`Loading dataset: ${selected.label}...`);
 
   const [{ path: featurePath, text: featureText }, { path: chipPath, text: chipText }] = await Promise.all([
-    fetchCsvFromCandidates(FEATURE_CSV_CANDIDATES),
-    fetchCsvFromCandidates(CHIP_CSV_CANDIDATES),
+    fetchCsvFromCandidates(featureCandidates),
+    fetchCsvFromCandidates(chipCandidates),
   ]);
 
   const featureRows = parseCsvText(featureText);
@@ -453,17 +635,38 @@ async function boot() {
 
   state.features = parsedFeature.features;
   state.records = mergeRecords(parsedFeature.records, chipMap);
-
-  applyQueryToState();
   state.selectedFeatures = new Set(
     Array.from(state.selectedFeatures).filter((feature) => state.features.includes(feature)),
   );
 
+  setStatus(`Loaded ${state.records.length} drivers from ${featurePath} and chips from ${chipPath}.`);
+}
+
+async function boot() {
+  applyQueryToState();
+  const requestedDataset = (new URLSearchParams(window.location.search).get("dataset") || "").trim();
+
+  const discovered = await discoverVersionedDatasets();
+  state.datasetOptions = discovered;
+
+  if (!state.datasetOptions.length) {
+    throw new Error("No versioned dataset pairs found under data/. Generate versioned CSV files first.");
+  }
+
+  if (!requestedDataset && discovered.length) {
+    state.selectedDatasetId = discovered[0].id;
+  }
+
+  if (!state.datasetOptions.some((item) => item.id === state.selectedDatasetId)) {
+    state.selectedDatasetId = state.datasetOptions[0].id;
+  }
+
+  renderDatasetSelect();
+  await loadSelectedDataset();
+
   renderMeta();
   syncUiFromState();
   renderTable();
-
-  setStatus(`Loaded ${state.records.length} drivers from ${featurePath} and chips from ${chipPath}.`);
 }
 
 window.addEventListener("DOMContentLoaded", async () => {

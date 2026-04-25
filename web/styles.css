@@ -139,6 +139,10 @@ select {
   min-height: 11rem;
 }
 
+#dataset-select {
+  min-height: 0;
+}
+
 .help {
   margin: 0;
   font-size: 0.78rem;
