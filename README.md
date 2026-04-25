@@ -101,30 +101,81 @@ scripts/generate_dsa_versioned_reports.sh
 By default, generated files are written to:
 
 ```text
-out/matrices/dsa_feature_matrix_linux_<version>.csv
-out/matrices/dsa_driver_chip_list_linux_<version>.csv
+data/dsa_feature_matrix_linux_<version>.csv
+data/dsa_driver_chip_list_linux_<version>.csv
 ```
 
 Examples:
 
 ```bash
 # Generate drivers-as-rows matrix output for each version
-scripts/generate_dsa_versioned_reports.sh --transpose
+scripts/generate_dsa_versioned_reports.sh --transpose --output-dir ./data
 
 # Process only a specific kernel version
-scripts/generate_dsa_versioned_reports.sh --version 6.8
+scripts/generate_dsa_versioned_reports.sh --version 6.8 --output-dir ./data
 
 # Process versions from 6.10 through 6.15
-scripts/generate_dsa_versioned_reports.sh --from 6.10 --to 6.15
+scripts/generate_dsa_versioned_reports.sh --from 6.10 --to 6.15 --output-dir ./data
 
 # Keep output in a custom directory
-scripts/generate_dsa_versioned_reports.sh --output-dir ./out/versioned-matrices
+scripts/generate_dsa_versioned_reports.sh --output-dir ./data
 
 # Delete downloaded archives after each run
-scripts/generate_dsa_versioned_reports.sh --no-cache
+scripts/generate_dsa_versioned_reports.sh --no-cache --output-dir ./data
 
 # Pass unresolved-row warnings to chip-list generation
-scripts/generate_dsa_versioned_reports.sh --warn-unresolved-chips
+scripts/generate_dsa_versioned_reports.sh --warn-unresolved-chips --output-dir ./data
+```
+
+### Generate per-release-line files for OpenWrt stable versions (23.05 to latest)
+
+Use the same wrapper script in OpenWrt release mode. It discovers stable
+OpenWrt release lines from the official releases index, downloads the matching
+`openwrt-<release_line>` source branch, detects its kernel line, and generates
+combined Linux+OpenWrt reports.
+
+```bash
+# Process OpenWrt stable release lines from 23.05 to latest stable
+scripts/generate_dsa_versioned_reports.sh \
+	--openwrt-releases \
+	--openwrt-from 23.05 \
+	--openwrt-to latest \
+	--transpose \
+	--output-dir ./data
+
+# Process only one OpenWrt release line
+scripts/generate_dsa_versioned_reports.sh \
+	--openwrt-releases \
+	--openwrt-from 23.05 \
+	--openwrt-to 23.05 \
+	--output-dir ./data
+
+# Include unresolved-chip warnings in OpenWrt mode
+scripts/generate_dsa_versioned_reports.sh \
+	--openwrt-releases \
+	--openwrt-from 23.05 \
+	--openwrt-to latest \
+	--warn-unresolved-chips \
+	--output-dir ./data
+```
+
+### Generate reports for OpenWrt main (unstable/snapshot) branch
+
+Use `--openwrt-snapshot` to download and process the `main` branch of the
+OpenWrt repository. Outputs are written with the `snapshot` suffix.
+
+```bash
+# Process OpenWrt main branch (drivers as rows)
+scripts/generate_dsa_versioned_reports.sh \
+	--openwrt-snapshot \
+	--transpose \
+	--output-dir ./data
+
+# Delete the downloaded snapshot archive after the run (always fresh on next run)
+scripts/generate_dsa_versioned_reports.sh \
+	--openwrt-snapshot \
+	--no-cache \
+	--output-dir ./data
 ```
 
 ## Browser Viewer
@@ -197,6 +248,23 @@ Chip-list generator arguments:
 - `--out`: output CSV path (default: `./dsa_driver_chip_list.csv`)
 - `--chip-delimiter`: delimiter used inside the `chips` field
 - `--warn-unresolved`: print warnings for unresolved or ambiguous rows
+
+Versioned wrapper script arguments:
+
+- `--version`: process only one Linux kernel version
+- `--from`: Linux start version (e.g. `6.8`)
+- `--to`: Linux end version (e.g. `7.0`)
+- `--openwrt-releases`: switch to OpenWrt stable release-line mode
+- `--openwrt-from`: OpenWrt start release line (default: `23.05`)
+- `--openwrt-to`: OpenWrt end release line or `latest` (default: `latest`)
+- `--openwrt-snapshot`: process the OpenWrt `main` (unstable) branch
+- `--output-dir`: output directory for generated CSV files (default: `./data`)
+- `--cache-dir`: archive cache directory (default: `./.cache/kernel-archives`)
+- `--no-cache`: delete downloaded archives after each successful run
+- `--stop-on-error`: stop immediately after the first failed version
+- `--transpose`: generate drivers-as-rows matrix output
+- `--warn-unresolved-chips`: pass unresolved warnings to chip-list generation
+- `--chip-delimiter`: delimiter used inside the chip list cell
 
 ## Disclaimer
 

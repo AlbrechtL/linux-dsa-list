@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generate one DSA feature-matrix CSV and one chip-list CSV per Linux kernel
-# release line from 6.8 through 7.0.
+# release line, or per OpenWrt stable release line.
 
 set -u
 set -o pipefail
@@ -17,6 +17,13 @@ STOP_ON_ERROR=0
 TRANSPOSE=0
 WARN_UNRESOLVED_CHIPS=0
 CHIP_DELIMITER='; '
+OPENWRT_RELEASES=0
+OPENWRT_FROM=""
+OPENWRT_TO=""
+OPENWRT_RELEASES_URL="https://downloads.openwrt.org/releases/"
+OPENWRT_SNAPSHOT=0
+OPENWRT_SNAPSHOT_BRANCH="main"
+OPENWRT_SNAPSHOT_LABEL="snapshot"
 
 START_MINOR=8
 END_MAJOR=7
@@ -34,8 +41,12 @@ Options:
   --version X.Y            Process only a specific kernel version (e.g., 6.8).
   --from X.Y               Start version (default: 6.8).
   --to X.Y                 End version (default: 7.0).
+  --openwrt-releases       Process OpenWrt stable release lines.
+  --openwrt-from X.Y       Start OpenWrt release line (default: 23.05).
+  --openwrt-to X.Y|latest  End OpenWrt release line (default: latest).
+  --openwrt-snapshot       Process OpenWrt main (unstable/master) branch.
   --output-dir PATH        Directory for generated CSV files.
-                           Default: ./out/matrices
+                           Default: ./data
   --cache-dir PATH         Directory for downloaded kernel archives.
                            Default: ./.cache/kernel-archives
   --no-cache               Delete archives after each successful version run.
@@ -49,6 +60,14 @@ Outputs per version:
   dsa_feature_matrix_linux_<version>.csv
   dsa_driver_chip_list_linux_<version>.csv
 
+Outputs per OpenWrt release line:
+  dsa_feature_matrix_openwrt_<release_line>.csv
+  dsa_driver_chip_list_openwrt_<release_line>.csv
+
+Outputs for OpenWrt snapshot:
+	dsa_feature_matrix_openwrt_snapshot.csv
+	dsa_driver_chip_list_openwrt_snapshot.csv
+
 Examples:
   # Process only version 6.8
   scripts/generate_dsa_versioned_reports.sh --version 6.8
@@ -56,8 +75,15 @@ Examples:
   # Process versions 6.10 through 6.15
   scripts/generate_dsa_versioned_reports.sh --from 6.10 --to 6.15
 
+  # Process OpenWrt stable release lines from 23.05 to latest
+  scripts/generate_dsa_versioned_reports.sh --openwrt-releases --openwrt-from 23.05 --openwrt-to latest
+
+	# Process OpenWrt main (unstable) branch
+	scripts/generate_dsa_versioned_reports.sh --openwrt-snapshot
+
 Scope:
-  - Linux-only generation (no OpenWrt parsing)
+  - Linux release-line generation from kernel.org archives
+  - OpenWrt release-line generation from OpenWrt stable lines
   - Exact release tar archives only
 EOF
 }
@@ -115,46 +141,168 @@ download_archive() {
 	wget -O "$out_path" "$url"
 }
 
+version_line_to_int() {
+	local v="$1"
+	local major minor
+	major="${v%%.*}"
+	minor="${v##*.}"
+	printf '%d\n' "$((10#${major} * 100 + 10#${minor}))"
+}
+
+discover_openwrt_release_lines() {
+	local page
+	local line
+	local -a found_lines=()
+	local -A seen=()
+
+	if command -v curl >/dev/null 2>&1; then
+		page="$(curl -fsSL "$OPENWRT_RELEASES_URL")" || {
+			err "failed to fetch OpenWrt releases index"
+			return 1
+		}
+	else
+		page="$(wget -q -O - "$OPENWRT_RELEASES_URL")" || {
+			err "failed to fetch OpenWrt releases index"
+			return 1
+		}
+	fi
+
+	while IFS= read -r line; do
+		if [[ -n "${line}" && -z "${seen[${line}]:-}" ]]; then
+			seen["${line}"]=1
+			found_lines+=("${line}")
+		fi
+	done < <(
+		printf '%s\n' "$page" |
+			sed -n 's/.*href="\([0-9]\+\.[0-9]\+[0-9]*\(\.[0-9]\+\)\?\)\/".*/\1/p' |
+			sed -E 's/^([0-9]+\.[0-9]+)\.[0-9]+$/\1/' |
+			sort -V
+	)
+
+	if [[ ${#found_lines[@]} -eq 0 ]]; then
+		err "no OpenWrt stable release lines found"
+		return 1
+	fi
+
+	printf '%s\n' "${found_lines[@]}"
+}
+
+discover_openwrt_versions() {
+	local from_line="${OPENWRT_FROM:-23.05}"
+	local to_line="$OPENWRT_TO"
+	local -a all_lines=()
+	local -a selected=()
+	local lines_text
+	local latest_line
+	local from_i to_i curr_i
+	local line
+
+	if ! lines_text="$(discover_openwrt_release_lines)"; then
+		return 1
+	fi
+	mapfile -t all_lines <<<"$lines_text"
+
+	latest_line="${all_lines[-1]}"
+	if [[ -z "$to_line" || "$to_line" == "latest" ]]; then
+		to_line="$latest_line"
+	fi
+
+	from_i="$(version_line_to_int "$from_line")"
+	to_i="$(version_line_to_int "$to_line")"
+	if [[ "$from_i" -gt "$to_i" ]]; then
+		err "invalid OpenWrt range: ${from_line} > ${to_line}"
+		return 1
+	fi
+
+	for line in "${all_lines[@]}"; do
+		curr_i="$(version_line_to_int "$line")"
+		if [[ "$curr_i" -ge "$from_i" && "$curr_i" -le "$to_i" ]]; then
+			selected+=("$line")
+		fi
+	done
+
+	if [[ ${#selected[@]} -eq 0 ]]; then
+		err "no OpenWrt release lines found in specified range"
+		return 1
+	fi
+
+	printf '%s\n' "${selected[@]}"
+}
+
+detect_openwrt_kernel_version() {
+	local openwrt_root="$1"
+	local kv_file="${openwrt_root}/include/kernel-version.mk"
+	local kernel_version
+
+	if [[ -f "$kv_file" ]]; then
+		kernel_version="$(sed -n 's/^KERNEL_PATCHVER[[:space:]]*[:?+]*=[[:space:]]*\([0-9]\+\.[0-9]\+\).*/\1/p' "$kv_file" | head -n 1)"
+		if [[ -n "$kernel_version" ]]; then
+			printf '%s\n' "$kernel_version"
+			return 0
+		fi
+	fi
+
+	# Fallback 1: infer from include/kernel-<major>.<minor> (pre-25.12 layout)
+	kernel_version="$(find "${openwrt_root}/include" -maxdepth 1 -type f -name 'kernel-[0-9]*.[0-9]*' -printf '%f\n' 2>/dev/null | sed -n 's/^kernel-\([0-9]\+\.[0-9]\+\)$/\1/p' | sort -V | tail -n 1)"
+	if [[ -n "$kernel_version" ]]; then
+		printf '%s\n' "$kernel_version"
+		return 0
+	fi
+
+	# Fallback 2: infer from target/linux/generic/kernel-<major>.<minor> (25.12+ layout)
+	kernel_version="$(find "${openwrt_root}/target/linux/generic" -maxdepth 1 -type f -name 'kernel-[0-9]*.[0-9]*' -printf '%f\n' 2>/dev/null | sed -n 's/^kernel-\([0-9]\+\.[0-9]\+\)$/\1/p' | sort -V | tail -n 1)"
+	if [[ -n "$kernel_version" ]]; then
+		printf '%s\n' "$kernel_version"
+		return 0
+	fi
+
+	return 1
+}
+
 run_matrix_generator() {
 	local linux_root="$1"
 	local out_csv="$2"
 	local transpose="$3"
+	local include_openwrt="${4:-0}"
+	local openwrt_root="${5:-}"
+	local -a cmd=(
+		python3 "$MATRIX_GENERATOR"
+		--linux-root "$linux_root"
+		--out "$out_csv"
+		--column-mode relative
+	)
 
 	if [[ "$transpose" -eq 1 ]]; then
-		python3 "$MATRIX_GENERATOR" \
-			--linux-root "$linux_root" \
-			--out "$out_csv" \
-			--column-mode relative \
-			--transpose
-		return $?
+		cmd+=(--transpose)
+	fi
+	if [[ "$include_openwrt" -eq 1 ]]; then
+		cmd+=(--include-openwrt --openwrt-root "$openwrt_root")
 	fi
 
-	python3 "$MATRIX_GENERATOR" \
-		--linux-root "$linux_root" \
-		--out "$out_csv" \
-		--column-mode relative
+	"${cmd[@]}"
 }
 
 run_chip_generator() {
 	local linux_root="$1"
 	local input_csv="$2"
 	local out_csv="$3"
+	local openwrt_root="${4:-}"
+	local -a cmd=(
+		python3 "$CHIP_GENERATOR"
+		--input-csv "$input_csv"
+		--linux-root "$linux_root"
+		--out "$out_csv"
+		--chip-delimiter "$CHIP_DELIMITER"
+	)
 
+	if [[ -n "$openwrt_root" ]]; then
+		cmd+=(--openwrt-root "$openwrt_root")
+	fi
 	if [[ "$WARN_UNRESOLVED_CHIPS" -eq 1 ]]; then
-		python3 "$CHIP_GENERATOR" \
-			--input-csv "$input_csv" \
-			--linux-root "$linux_root" \
-			--out "$out_csv" \
-			--chip-delimiter "$CHIP_DELIMITER" \
-			--warn-unresolved
-		return $?
+		cmd+=(--warn-unresolved)
 	fi
 
-	python3 "$CHIP_GENERATOR" \
-		--input-csv "$input_csv" \
-		--linux-root "$linux_root" \
-		--out "$out_csv" \
-		--chip-delimiter "$CHIP_DELIMITER"
+	"${cmd[@]}"
 }
 
 discover_versions() {
@@ -323,9 +471,127 @@ process_version() {
 	return 0
 }
 
+process_openwrt_release_line() {
+	local release_line="$1"
+	local branch="${2:-openwrt-${release_line}}"
+	local label="${3:-${release_line}}"
+	local openwrt_archive_name openwrt_archive_url openwrt_archive_path
+	local openwrt_work_dir openwrt_root
+	local linux_version linux_archive_ext linux_archive_name linux_archive_url linux_archive_path
+	local linux_work_dir linux_root
+	local matrix_csv chip_csv chip_input_csv temp_transposed_csv
+
+	openwrt_archive_name="openwrt-${label}.tar.gz"
+	openwrt_archive_url="https://github.com/openwrt/openwrt/archive/refs/heads/${branch}.tar.gz"
+	openwrt_archive_path="${CACHE_DIR}/${openwrt_archive_name}"
+
+	if [[ ! -f "$openwrt_archive_path" ]]; then
+		log "Downloading ${openwrt_archive_url}"
+		if ! download_archive "$openwrt_archive_url" "$openwrt_archive_path"; then
+			err "download failed for OpenWrt ${label}"
+			return 1
+		fi
+	else
+		log "Reusing cached archive ${openwrt_archive_name}"
+	fi
+
+	openwrt_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/openwrt-dsa-${release_line}.XXXXXX")"
+	if ! tar -xf "$openwrt_archive_path" -C "$openwrt_work_dir"; then
+		err "failed to extract ${openwrt_archive_name}"
+		rm -rf "$openwrt_work_dir"
+		return 1
+	fi
+
+	openwrt_root="$(find "$openwrt_work_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+	if [[ -z "$openwrt_root" ]]; then
+		err "could not find extracted OpenWrt root for ${label}"
+		rm -rf "$openwrt_work_dir"
+		return 1
+	fi
+
+	linux_version="$(detect_openwrt_kernel_version "$openwrt_root")" || {
+		err "could not detect kernel version for OpenWrt ${label}"
+		rm -rf "$openwrt_work_dir"
+		return 1
+	}
+
+	linux_archive_ext="$(choose_archive_format "$linux_version")" || {
+		err "could not find Linux archive for detected kernel version ${linux_version} (OpenWrt ${label})"
+		rm -rf "$openwrt_work_dir"
+		return 1
+	}
+
+	linux_archive_name="linux-${linux_version}.tar.${linux_archive_ext}"
+	linux_archive_url="https://cdn.kernel.org/pub/linux/kernel/v${linux_version%%.*}.x/${linux_archive_name}"
+	linux_archive_path="${CACHE_DIR}/${linux_archive_name}"
+
+	if [[ ! -f "$linux_archive_path" ]]; then
+		log "Downloading ${linux_archive_url}"
+		if ! download_archive "$linux_archive_url" "$linux_archive_path"; then
+			err "download failed for Linux ${linux_version}"
+			rm -rf "$openwrt_work_dir"
+			return 1
+		fi
+	else
+		log "Reusing cached archive ${linux_archive_name}"
+	fi
+
+	linux_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/linux-dsa-${linux_version}.XXXXXX")"
+	if ! tar -xf "$linux_archive_path" -C "$linux_work_dir"; then
+		err "failed to extract ${linux_archive_name}"
+		rm -rf "$openwrt_work_dir" "$linux_work_dir"
+		return 1
+	fi
+
+	linux_root="$(find_extracted_root "$linux_work_dir" "$linux_version")" || {
+		err "could not find extracted Linux root for ${linux_version} (OpenWrt ${label})"
+		rm -rf "$openwrt_work_dir" "$linux_work_dir"
+		return 1
+	}
+
+	matrix_csv="${OUTPUT_DIR}/dsa_feature_matrix_openwrt_${label}.csv"
+	chip_csv="${OUTPUT_DIR}/dsa_driver_chip_list_openwrt_${label}.csv"
+	log "Generating ${matrix_csv} (OpenWrt ${label} + Linux ${linux_version})"
+
+	if ! run_matrix_generator "$linux_root" "$matrix_csv" "$TRANSPOSE" 1 "$openwrt_root"; then
+		err "feature matrix generation failed for OpenWrt ${label}"
+		rm -rf "$openwrt_work_dir" "$linux_work_dir"
+		return 1
+	fi
+
+	chip_input_csv="$matrix_csv"
+	if [[ "$TRANSPOSE" -ne 1 ]]; then
+		temp_transposed_csv="${linux_work_dir}/dsa_feature_matrix_openwrt_${label}_transpose.csv"
+		log "Generating temporary transposed matrix for chip extraction"
+		if ! run_matrix_generator "$linux_root" "$temp_transposed_csv" 1 1 "$openwrt_root"; then
+			err "temporary transposed matrix generation failed for OpenWrt ${label}"
+			rm -rf "$openwrt_work_dir" "$linux_work_dir"
+			return 1
+		fi
+		chip_input_csv="$temp_transposed_csv"
+	fi
+
+	log "Generating ${chip_csv}"
+	if ! run_chip_generator "$linux_root" "$chip_input_csv" "$chip_csv" "$openwrt_root"; then
+		err "chip-list generation failed for OpenWrt ${label}"
+		rm -rf "$openwrt_work_dir" "$linux_work_dir"
+		return 1
+	fi
+
+	rm -rf "$openwrt_work_dir" "$linux_work_dir"
+
+	if [[ "$KEEP_ARCHIVES" -eq 0 ]]; then
+		rm -f "$openwrt_archive_path"
+		rm -f "$linux_archive_path"
+	fi
+
+	return 0
+}
+
 main() {
 	local versions_text
 	local -a versions=()
+	local -a openwrt_lines=()
 	local -a ok_versions=()
 	local -a failed_versions=()
 	local version
@@ -342,6 +608,22 @@ main() {
 				;;
 			--to)
 				TO_VERSION="$2"
+				shift 2
+				;;
+			--openwrt-releases)
+				OPENWRT_RELEASES=1
+				shift
+				;;
+			--openwrt-snapshot)
+				OPENWRT_SNAPSHOT=1
+				shift
+				;;
+			--openwrt-from)
+				OPENWRT_FROM="$2"
+				shift 2
+				;;
+			--openwrt-to)
+				OPENWRT_TO="$2"
 				shift 2
 				;;
 			--output-dir)
@@ -391,6 +673,30 @@ main() {
 		err "either curl or wget is required"
 		exit 1
 	fi
+	if [[ "$OPENWRT_RELEASES" -eq 1 ]]; then
+		if [[ -n "$SINGLE_VERSION" || -n "$FROM_VERSION" || -n "$TO_VERSION" ]]; then
+			err "--openwrt-releases cannot be combined with Linux --version/--from/--to options"
+			exit 1
+		fi
+		if [[ "$OPENWRT_SNAPSHOT" -eq 1 ]]; then
+			err "--openwrt-releases cannot be combined with --openwrt-snapshot"
+			exit 1
+		fi
+		if [[ -n "$OPENWRT_TO" && "$OPENWRT_TO" != "latest" && ! "$OPENWRT_TO" =~ ^[0-9]+\.[0-9]+$ ]]; then
+			err "--openwrt-to must be X.Y or 'latest'"
+			exit 1
+		fi
+		if [[ -n "$OPENWRT_FROM" && ! "$OPENWRT_FROM" =~ ^[0-9]+\.[0-9]+$ ]]; then
+			err "--openwrt-from must be X.Y"
+			exit 1
+		fi
+	fi
+	if [[ "$OPENWRT_SNAPSHOT" -eq 1 ]]; then
+		if [[ -n "$SINGLE_VERSION" || -n "$FROM_VERSION" || -n "$TO_VERSION" ]]; then
+			err "--openwrt-snapshot cannot be combined with Linux --version/--from/--to options"
+			exit 1
+		fi
+	fi
 	if [[ ! -f "$MATRIX_GENERATOR" ]]; then
 		err "matrix generator script not found: ${MATRIX_GENERATOR}"
 		exit 1
@@ -403,30 +709,68 @@ main() {
 	mkdir -p "$OUTPUT_DIR"
 	mkdir -p "$CACHE_DIR"
 
-	if ! versions_text="$(discover_versions)"; then
-		exit 1
-	fi
-	mapfile -t versions <<<"$versions_text"
-
-	log "Discovered versions: ${versions[*]}"
-
-	for version in "${versions[@]}"; do
-		if process_version "$version"; then
-			ok_versions+=("$version")
-		else
-			failed_versions+=("$version")
-			if [[ "$STOP_ON_ERROR" -eq 1 ]]; then
-				break
-			fi
+	if [[ "$OPENWRT_RELEASES" -eq 1 ]]; then
+		if ! versions_text="$(discover_openwrt_versions)"; then
+			exit 1
 		fi
-	done
+		mapfile -t openwrt_lines <<<"$versions_text"
+		log "Discovered OpenWrt release lines: ${openwrt_lines[*]}"
+
+		for version in "${openwrt_lines[@]}"; do
+			if process_openwrt_release_line "$version"; then
+				ok_versions+=("$version")
+			else
+				failed_versions+=("$version")
+				if [[ "$STOP_ON_ERROR" -eq 1 ]]; then
+					break
+				fi
+			fi
+		done
+	elif [[ "$OPENWRT_SNAPSHOT" -eq 1 ]]; then
+		log "Processing OpenWrt snapshot (branch: ${OPENWRT_SNAPSHOT_BRANCH})"
+		if process_openwrt_release_line "$OPENWRT_SNAPSHOT_LABEL" "$OPENWRT_SNAPSHOT_BRANCH" "$OPENWRT_SNAPSHOT_LABEL"; then
+			ok_versions+=("$OPENWRT_SNAPSHOT_LABEL")
+		else
+			failed_versions+=("$OPENWRT_SNAPSHOT_LABEL")
+		fi
+	else
+		if ! versions_text="$(discover_versions)"; then
+			exit 1
+		fi
+		mapfile -t versions <<<"$versions_text"
+
+		log "Discovered versions: ${versions[*]}"
+
+		for version in "${versions[@]}"; do
+			if process_version "$version"; then
+				ok_versions+=("$version")
+			else
+				failed_versions+=("$version")
+				if [[ "$STOP_ON_ERROR" -eq 1 ]]; then
+					break
+				fi
+			fi
+		done
+	fi
 
 	log "Completed: ${#ok_versions[@]} success, ${#failed_versions[@]} failed"
 	for version in "${ok_versions[@]}"; do
-		printf '  OK     %s -> %s/dsa_feature_matrix_linux_%s.csv\n' \
-			"$version" "$OUTPUT_DIR" "$version"
-		printf '         %s/dsa_driver_chip_list_linux_%s.csv\n' \
-			"$OUTPUT_DIR" "$version"
+		if [[ "$OPENWRT_RELEASES" -eq 1 ]]; then
+			printf '  OK     %s -> %s/dsa_feature_matrix_openwrt_%s.csv\n' \
+				"$version" "$OUTPUT_DIR" "$version"
+			printf '         %s/dsa_driver_chip_list_openwrt_%s.csv\n' \
+				"$OUTPUT_DIR" "$version"
+		elif [[ "$OPENWRT_SNAPSHOT" -eq 1 ]]; then
+			printf '  OK     %s -> %s/dsa_feature_matrix_openwrt_%s.csv\n' \
+				"$version" "$OUTPUT_DIR" "$version"
+			printf '         %s/dsa_driver_chip_list_openwrt_%s.csv\n' \
+				"$OUTPUT_DIR" "$version"
+		else
+			printf '  OK     %s -> %s/dsa_feature_matrix_linux_%s.csv\n' \
+				"$version" "$OUTPUT_DIR" "$version"
+			printf '         %s/dsa_driver_chip_list_linux_%s.csv\n' \
+				"$OUTPUT_DIR" "$version"
+		fi
 	done
 	for version in "${failed_versions[@]}"; do
 		printf '  FAILED %s\n' "$version"
