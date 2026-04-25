@@ -1,12 +1,14 @@
 # linux-dsa-list
 
-Hosted viewer: https://linux-dsa-list.albrechtloh.de/
-
 This repository provides a toolset for getting an overview of Linux DSA
 support: which DSA features are implemented by each driver, and which chips are
 handled by those drivers. It includes the parser scripts used to build the
 datasets, the generated versioned CSV reports, and a static browser viewer for
 exploring Linux and OpenWrt DSA support.
+
+Hosted viewer: https://linux-dsa-list.albrechtloh.de/
+
+![Linux DSA List Web Page](screenshots/screenshot-web-page.png)
 
 The feature-matrix generator builds the driver-feature overview by parsing:
 
