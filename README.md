@@ -38,7 +38,7 @@ From repository root:
 ```bash
 python scripts/generate_dsa_feature_matrix.py \
 	--linux-root linux \
-	--out ./data/dsa_feature_matrix.csv \
+	--out dsa_feature_matrix.csv \
 	--column-mode relative
 ```
 
@@ -47,7 +47,7 @@ python scripts/generate_dsa_feature_matrix.py \
 ```bash
 python scripts/generate_dsa_feature_matrix.py \
 	--linux-root linux \
-	--out ./data/dsa_feature_matrix.csv \
+	--out dsa_feature_matrix.csv \
 	--column-mode relative \
 	--transpose
 ```
@@ -59,7 +59,7 @@ python scripts/generate_dsa_feature_matrix.py \
 	--linux-root linux \
 	--include-openwrt \
 	--openwrt-root openwrt \
-	--out ./data/dsa_feature_matrix_openwrt.csv \
+	--out dsa_feature_matrix_openwrt.csv \
 	--column-mode relative \
 	--transpose
 ```
@@ -71,10 +71,10 @@ The chip-list generator expects a transposed input CSV whose first column is
 
 ```bash
 python scripts/generate_dsa_driver_chip_list.py \
-	--input-csv ./data/dsa_feature_matrix.csv \
+	--input-csv dsa_feature_matrix.csv \
 	--linux-root linux \
 	--openwrt-root openwrt \
-	--out ./data/dsa_driver_chip_list.csv
+	--out dsa_driver_chip_list.csv
 ```
 
 It resolves each driver row back to Linux or OpenWrt source files and extracts
@@ -109,22 +109,22 @@ Examples:
 
 ```bash
 # Generate drivers-as-rows matrix output for each version
-scripts/generate_dsa_versioned_reports.sh --transpose --output-dir ./data
+scripts/generate_dsa_versioned_reports.sh --transpose
 
 # Process only a specific kernel version
-scripts/generate_dsa_versioned_reports.sh --version 6.8 --output-dir ./data
+scripts/generate_dsa_versioned_reports.sh --version 6.8
 
 # Process versions from 6.10 through 6.15
-scripts/generate_dsa_versioned_reports.sh --from 6.10 --to 6.15 --output-dir ./data
+scripts/generate_dsa_versioned_reports.sh --from 6.10 --to 6.15
 
 # Keep output in a custom directory
-scripts/generate_dsa_versioned_reports.sh --output-dir ./data
+scripts/generate_dsa_versioned_reports.sh --output-dir ./out/versioned-matrices
 
 # Delete downloaded archives after each run
-scripts/generate_dsa_versioned_reports.sh --no-cache --output-dir ./data
+scripts/generate_dsa_versioned_reports.sh --no-cache
 
 # Pass unresolved-row warnings to chip-list generation
-scripts/generate_dsa_versioned_reports.sh --warn-unresolved-chips --output-dir ./data
+scripts/generate_dsa_versioned_reports.sh --warn-unresolved-chips
 ```
 
 ## Browser Viewer
