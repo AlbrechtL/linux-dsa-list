@@ -224,9 +224,15 @@ thead th {
   white-space: nowrap;
 }
 
-thead th:first-child,
-thead th:nth-child(2) {
-  z-index: 3;
+#matrix-table tr > :first-child {
+  position: sticky;
+  left: 0;
+  min-width: 260px;
+  max-width: 360px;
+}
+
+thead tr > :first-child {
+  z-index: 4;
 }
 
 tbody td,
@@ -244,11 +250,7 @@ tbody tr:nth-child(odd) th {
 }
 
 tbody th {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  min-width: 260px;
-  max-width: 360px;
+  z-index: 3;
   background: #ebf2ee;
   font-size: 0.78rem;
   text-align: left;
@@ -256,13 +258,15 @@ tbody th {
   word-break: break-word;
 }
 
-tbody td.chips-cell {
-  position: sticky;
-  left: 260px;
-  z-index: 1;
-  min-width: 260px;
-  max-width: 420px;
-  background: #edf4f5;
+.driver-cell-content {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.driver-name {
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .chips {
@@ -338,10 +342,5 @@ tbody td.chips-cell {
 
   tbody th {
     min-width: 210px;
-  }
-
-  tbody td.chips-cell {
-    left: 210px;
-    min-width: 220px;
   }
 }

@@ -580,10 +580,6 @@ function renderTable() {
   thDriver.textContent = "driver";
   headerRow.appendChild(thDriver);
 
-  const thChips = document.createElement("th");
-  thChips.textContent = "chips";
-  headerRow.appendChild(thChips);
-
   for (const feature of shownFeatures) {
     const th = document.createElement("th");
     th.textContent = feature;
@@ -599,17 +595,18 @@ function renderTable() {
 
     const driverCell = document.createElement("th");
     driverCell.scope = "row";
-    driverCell.textContent = record.driver;
-    tr.appendChild(driverCell);
-
-    const chipsCell = document.createElement("td");
-    chipsCell.className = "chips-cell";
+    const driverContent = document.createElement("div");
+    driverContent.className = "driver-cell-content";
+    const driverName = document.createElement("div");
+    driverName.className = "driver-name";
+    driverName.textContent = record.driver;
+    driverContent.appendChild(driverName);
 
     if (!record.chips.length) {
       const empty = document.createElement("span");
       empty.className = "missing-chip";
       empty.textContent = "-";
-      chipsCell.appendChild(empty);
+      driverContent.appendChild(empty);
     } else {
       const wrap = document.createElement("div");
       wrap.className = "chips";
@@ -618,9 +615,10 @@ function renderTable() {
         node.textContent = chipName;
         wrap.appendChild(node);
       }
-      chipsCell.appendChild(wrap);
+      driverContent.appendChild(wrap);
     }
-    tr.appendChild(chipsCell);
+    driverCell.appendChild(driverContent);
+    tr.appendChild(driverCell);
 
     for (const feature of shownFeatures) {
       const td = document.createElement("td");
