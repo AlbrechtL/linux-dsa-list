@@ -1,0 +1,5 @@
+linux/
+.venv/
+openwrt/
+*/__pycache__/
+*.csv
