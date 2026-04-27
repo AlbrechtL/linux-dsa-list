@@ -24,6 +24,10 @@ OPENWRT_RELEASES_URL="https://downloads.openwrt.org/releases/"
 OPENWRT_SNAPSHOT=0
 OPENWRT_SNAPSHOT_BRANCH="main"
 OPENWRT_SNAPSHOT_LABEL="snapshot"
+MICROCHIP_RELEASES=0
+MICROCHIP_FROM="bsp-6.6-2024.12"
+MICROCHIP_TO="latest"
+MICROCHIP_TAGS_API_URL="https://api.github.com/repos/microchip-ung/linux/tags?per_page=100"
 
 START_MINOR=8
 END_MAJOR=7
@@ -44,7 +48,11 @@ Options:
   --openwrt-releases       Process OpenWrt stable release lines.
   --openwrt-from X.Y       Start OpenWrt release line (default: 23.05).
   --openwrt-to X.Y|latest  End OpenWrt release line (default: latest).
-  --openwrt-snapshot       Process OpenWrt main (unstable/master) branch.
+	--openwrt-snapshot       Process OpenWrt main (unstable/master) branch.
+	--microchip-releases     Process Microchip BSP tags from microchip-ung/linux.
+	--microchip-from TAG     Start BSP tag (default: bsp-6.6-2024.12).
+	--microchip-to TAG|latest
+													 End BSP tag (default: latest).
   --output-dir PATH        Directory for generated CSV files.
                            Default: ./data
   --cache-dir PATH         Directory for downloaded kernel archives.
@@ -67,6 +75,10 @@ Outputs for OpenWrt snapshot:
 	dsa_feature_matrix_openwrt_snapshot.csv
 	dsa_driver_chip_list_openwrt_snapshot.csv
 
+Outputs for Microchip BSP tags:
+	dsa_feature_matrix_microchip-ung_<tag>.csv
+	dsa_driver_chip_list_microchip-ung_<tag>.csv
+
 Examples:
   # Process only version 6.8
   scripts/generate_dsa_versioned_reports.sh --version 6.8
@@ -80,9 +92,19 @@ Examples:
 	# Process OpenWrt main (unstable) branch
 	scripts/generate_dsa_versioned_reports.sh --openwrt-snapshot
 
+  # Process Microchip BSP tags from bsp-6.6-2024.12 to latest
+  scripts/generate_dsa_versioned_reports.sh --microchip-releases
+
+  # Process one Microchip BSP tag
+  scripts/generate_dsa_versioned_reports.sh \
+	  --microchip-releases \
+	  --microchip-from bsp-6.12-2025.12 \
+	  --microchip-to bsp-6.12-2025.12
+
 Scope:
   - Linux release-line generation from kernel.org archives
   - OpenWrt release-line generation from OpenWrt stable lines
+	- Microchip BSP tag generation from microchip-ung/linux
   - Exact release tar archives only
 EOF
 }
@@ -226,6 +248,86 @@ discover_openwrt_versions() {
 	fi
 
 	printf '%s\n' "${selected[@]}"
+}
+
+discover_microchip_versions() {
+	local from_tag="${MICROCHIP_FROM:-bsp-6.6-2024.12}"
+	local to_tag="${MICROCHIP_TO:-latest}"
+	local tags_json
+
+	if command -v curl >/dev/null 2>&1; then
+		tags_json="$(curl -fsSL "$MICROCHIP_TAGS_API_URL")" || {
+			err "failed to fetch Microchip tag list"
+			return 1
+		}
+	else
+		tags_json="$(wget -q -O - "$MICROCHIP_TAGS_API_URL")" || {
+			err "failed to fetch Microchip tag list"
+			return 1
+		}
+	fi
+
+	TAGS_JSON="$tags_json" python3 - "$from_tag" "$to_tag" <<'PY'
+import json
+import os
+import re
+import sys
+
+pattern = re.compile(r"^bsp-(\d+)\.(\d+)-(\d{4})\.(\d{2})(?:-(\d+))?$")
+
+
+def sort_key(tag: str) -> tuple[int, int, int, int, int]:
+	match = pattern.match(tag)
+	if not match:
+		raise ValueError(tag)
+	major, minor, year, month, suffix = match.groups()
+	return (int(year), int(month), int(major), int(minor), int(suffix or "0"))
+
+
+def die(message: str) -> None:
+	print(message, file=sys.stderr)
+	raise SystemExit(1)
+
+
+from_tag = sys.argv[1]
+to_tag = sys.argv[2]
+
+try:
+	payload = json.loads(os.environ["TAGS_JSON"])
+except Exception as exc:
+	die(f"failed to parse Microchip tag API response: {exc}")
+
+tags = []
+for item in payload:
+	name = item.get("name", "")
+	if pattern.match(name):
+		tags.append(name)
+
+if not tags:
+	die("no Microchip BSP tags found")
+
+tags = sorted(set(tags), key=sort_key)
+
+if from_tag not in tags:
+	die(f"--microchip-from tag not found: {from_tag}")
+
+if to_tag == "latest":
+	to_tag = tags[-1]
+elif to_tag not in tags:
+	die(f"--microchip-to tag not found: {to_tag}")
+
+from_idx = tags.index(from_tag)
+to_idx = tags.index(to_tag)
+if from_idx > to_idx:
+	die(f"invalid Microchip range: {from_tag} > {to_tag}")
+
+selected = tags[from_idx : to_idx + 1]
+if not selected:
+	die("no Microchip BSP tags found in specified range")
+
+for tag in selected:
+	print(tag)
+PY
 }
 
 detect_openwrt_kernel_version() {
@@ -577,6 +679,75 @@ process_openwrt_release_line() {
 	return 0
 }
 
+process_microchip_release_tag() {
+	local tag="$1"
+	local archive_name archive_url archive_path
+	local work_dir linux_root
+	local matrix_csv chip_csv chip_input_csv
+
+	archive_name="microchip-ung-${tag}.tar.gz"
+	archive_url="https://github.com/microchip-ung/linux/archive/refs/tags/${tag}.tar.gz"
+	archive_path="${CACHE_DIR}/${archive_name}"
+
+	if [[ ! -f "$archive_path" ]]; then
+		log "Downloading ${archive_url}"
+		if ! download_archive "$archive_url" "$archive_path"; then
+			err "download failed for Microchip tag ${tag}"
+			return 1
+		fi
+	else
+		log "Reusing cached archive ${archive_name}"
+	fi
+
+	work_dir="$(mktemp -d "${TMPDIR:-/tmp}/microchip-dsa-${tag}.XXXXXX")"
+
+	if ! tar -xf "$archive_path" -C "$work_dir"; then
+		err "failed to extract ${archive_name}"
+		rm -rf "$work_dir"
+		return 1
+	fi
+
+	linux_root="$(find "$work_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+	if [[ -z "$linux_root" ]]; then
+		err "could not find extracted root for Microchip tag ${tag}"
+		rm -rf "$work_dir"
+		return 1
+	fi
+
+	if [[ ! -f "${linux_root}/Makefile" ]] || [[ ! -f "${linux_root}/include/net/dsa.h" ]]; then
+		err "invalid Microchip Linux source tree for ${tag}: ${linux_root}"
+		rm -rf "$work_dir"
+		return 1
+	fi
+
+	matrix_csv="${OUTPUT_DIR}/dsa_feature_matrix_microchip-ung_${tag}.csv"
+	chip_csv="${OUTPUT_DIR}/dsa_driver_chip_list_microchip-ung_${tag}.csv"
+	log "Generating ${matrix_csv}"
+
+	if ! run_matrix_generator "$linux_root" "$matrix_csv"; then
+		err "feature matrix generation failed for Microchip tag ${tag}"
+		rm -rf "$work_dir"
+		return 1
+	fi
+
+	chip_input_csv="$matrix_csv"
+
+	log "Generating ${chip_csv}"
+	if ! run_chip_generator "$linux_root" "$chip_input_csv" "$chip_csv"; then
+		err "chip-list generation failed for Microchip tag ${tag}"
+		rm -rf "$work_dir"
+		return 1
+	fi
+
+	rm -rf "$work_dir"
+
+	if [[ "$KEEP_ARCHIVES" -eq 0 ]]; then
+		rm -f "$archive_path"
+	fi
+
+	return 0
+}
+
 main() {
 	local versions_text
 	local -a versions=()
@@ -613,6 +784,18 @@ main() {
 				;;
 			--openwrt-to)
 				OPENWRT_TO="$2"
+				shift 2
+				;;
+			--microchip-releases)
+				MICROCHIP_RELEASES=1
+				shift
+				;;
+			--microchip-from)
+				MICROCHIP_FROM="$2"
+				shift 2
+				;;
+			--microchip-to)
+				MICROCHIP_TO="$2"
 				shift 2
 				;;
 			--output-dir)
@@ -682,6 +865,24 @@ main() {
 			exit 1
 		fi
 	fi
+	if [[ "$MICROCHIP_RELEASES" -eq 1 ]]; then
+		if [[ "$OPENWRT_RELEASES" -eq 1 || "$OPENWRT_SNAPSHOT" -eq 1 ]]; then
+			err "--microchip-releases cannot be combined with OpenWrt options"
+			exit 1
+		fi
+		if [[ -n "$SINGLE_VERSION" || -n "$FROM_VERSION" || -n "$TO_VERSION" ]]; then
+			err "--microchip-releases cannot be combined with Linux --version/--from/--to options"
+			exit 1
+		fi
+		if [[ ! "$MICROCHIP_FROM" =~ ^bsp-[0-9]+\.[0-9]+-[0-9]{4}\.[0-9]{2}(-[0-9]+)?$ ]]; then
+			err "--microchip-from must match bsp-<kernel>-<YYYY.MM>[-N]"
+			exit 1
+		fi
+		if [[ "$MICROCHIP_TO" != "latest" && ! "$MICROCHIP_TO" =~ ^bsp-[0-9]+\.[0-9]+-[0-9]{4}\.[0-9]{2}(-[0-9]+)?$ ]]; then
+			err "--microchip-to must match bsp-<kernel>-<YYYY.MM>[-N] or 'latest'"
+			exit 1
+		fi
+	fi
 	if [[ ! -f "$MATRIX_GENERATOR" ]]; then
 		err "matrix generator script not found: ${MATRIX_GENERATOR}"
 		exit 1
@@ -722,6 +923,23 @@ main() {
 		else
 			failed_versions+=("$OPENWRT_SNAPSHOT_LABEL")
 		fi
+	elif [[ "$MICROCHIP_RELEASES" -eq 1 ]]; then
+		if ! versions_text="$(discover_microchip_versions)"; then
+			exit 1
+		fi
+		mapfile -t versions <<<"$versions_text"
+		log "Discovered Microchip BSP tags: ${versions[*]}"
+
+		for version in "${versions[@]}"; do
+			if process_microchip_release_tag "$version"; then
+				ok_versions+=("$version")
+			else
+				failed_versions+=("$version")
+				if [[ "$STOP_ON_ERROR" -eq 1 ]]; then
+					break
+				fi
+			fi
+		done
 	else
 		if ! versions_text="$(discover_versions)"; then
 			exit 1
@@ -761,6 +979,11 @@ main() {
 			printf '  OK     %s -> %s/dsa_feature_matrix_openwrt_%s.csv\n' \
 				"$version" "$OUTPUT_DIR" "$version"
 			printf '         %s/dsa_driver_chip_list_openwrt_%s.csv\n' \
+				"$OUTPUT_DIR" "$version"
+		elif [[ "$MICROCHIP_RELEASES" -eq 1 ]]; then
+			printf '  OK     %s -> %s/dsa_feature_matrix_microchip-ung_%s.csv\n' \
+				"$version" "$OUTPUT_DIR" "$version"
+			printf '         %s/dsa_driver_chip_list_microchip-ung_%s.csv\n' \
 				"$OUTPUT_DIR" "$version"
 		else
 			printf '  OK     %s -> %s/dsa_feature_matrix_linux_%s.csv\n' \

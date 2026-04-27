@@ -18,6 +18,10 @@ The feature-matrix generator builds the driver-feature overview by parsing:
 Optionally, include OpenWrt kernel patch-based DSA drivers and mark them with
 an `openwrt:` prefix in the matrix.
 
+Microchip BSP tags from `microchip-ung/linux` are processed as full Linux
+kernel trees and generated into dedicated versioned files with a
+`microchip-ung` source label in the filename.
+
 The generator marks a feature as supported (`x`) when a driver initializes the
 corresponding callback in its `struct dsa_switch_ops` initializer.
 
@@ -114,6 +118,13 @@ data/dsa_feature_matrix_linux_<version>.csv
 data/dsa_driver_chip_list_linux_<version>.csv
 ```
 
+For Microchip BSP tag mode, generated files are written to:
+
+```text
+data/dsa_feature_matrix_microchip-ung_<tag>.csv
+data/dsa_driver_chip_list_microchip-ung_<tag>.csv
+```
+
 Examples:
 
 ```bash
@@ -164,6 +175,33 @@ scripts/generate_dsa_versioned_reports.sh \
 	--openwrt-from 23.05 \
 	--openwrt-to latest \
 	--warn-unresolved-chips \
+	--output-dir ./data
+```
+
+### Generate per-tag files for Microchip BSP releases (bsp-6.6-2024.12 to latest)
+
+Use `--microchip-releases` to download and process tags from
+`microchip-ung/linux`. These archives are full Linux kernel trees, so the
+Linux parser path is used directly.
+
+```bash
+# Process Microchip BSP tags from bsp-6.6-2024.12 to latest
+scripts/generate_dsa_versioned_reports.sh \
+	--microchip-releases \
+	--output-dir ./data
+
+# Process an explicit Microchip BSP tag range
+scripts/generate_dsa_versioned_reports.sh \
+	--microchip-releases \
+	--microchip-from bsp-6.6-2024.12 \
+	--microchip-to bsp-6.18-2026.03 \
+	--output-dir ./data
+
+# Process exactly one Microchip BSP tag
+scripts/generate_dsa_versioned_reports.sh \
+	--microchip-releases \
+	--microchip-from bsp-6.12-2025.12 \
+	--microchip-to bsp-6.12-2025.12 \
 	--output-dir ./data
 ```
 
@@ -272,6 +310,9 @@ Versioned wrapper script arguments:
 - `--openwrt-from`: OpenWrt start release line (default: `23.05`)
 - `--openwrt-to`: OpenWrt end release line or `latest` (default: `latest`)
 - `--openwrt-snapshot`: process the OpenWrt `main` (unstable) branch
+- `--microchip-releases`: switch to Microchip BSP tag mode
+- `--microchip-from`: Microchip BSP start tag (default: `bsp-6.6-2024.12`)
+- `--microchip-to`: Microchip BSP end tag or `latest` (default: `latest`)
 - `--output-dir`: output directory for generated CSV files (default: `./data`)
 - `--cache-dir`: archive cache directory (default: `./.cache/kernel-archives`)
 - `--no-cache`: delete downloaded archives after each successful run

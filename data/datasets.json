@@ -101,6 +101,18 @@
       "label": "OpenWrt 23.05",
       "feature": "dsa_feature_matrix_openwrt_23.05.csv",
       "chip": "dsa_driver_chip_list_openwrt_23.05.csv"
+    },
+    {
+      "id": "microchip-ung_bsp-6.12-2025.12",
+      "label": "Microchip-UNG bsp-6.12-2025.12",
+      "feature": "dsa_feature_matrix_microchip-ung_bsp-6.12-2025.12.csv",
+      "chip": "dsa_driver_chip_list_microchip-ung_bsp-6.12-2025.12.csv"
+    },
+    {
+      "id": "microchip-ung_bsp-6.18-2026.03",
+      "label": "Microchip-UNG bsp-6.18-2026.03",
+      "feature": "dsa_feature_matrix_microchip-ung_bsp-6.18-2026.03.csv",
+      "chip": "dsa_driver_chip_list_microchip-ung_bsp-6.18-2026.03.csv"
     }
   ]
 }

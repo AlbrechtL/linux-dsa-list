@@ -36,11 +36,20 @@ def parse_version_tuple(text: str) -> tuple[int, int] | None:
 
 def compare_dataset_key(dataset_id: str) -> tuple[int, int, tuple[int, int] | tuple[str, str]]:
     is_linux = dataset_id.startswith("linux_")
+    is_openwrt = dataset_id.startswith("openwrt_")
+    is_microchip = dataset_id.startswith("microchip-ung_")
     is_snapshot = dataset_id.endswith("_snapshot") or dataset_id == "snapshot"
     version_text = dataset_id.split("_", 1)[1] if "_" in dataset_id else dataset_id
     version_tuple = parse_version_tuple(version_text)
 
-    category_rank = 0 if is_linux else 1
+    if is_linux:
+        category_rank = 0
+    elif is_openwrt:
+        category_rank = 1
+    elif is_microchip:
+        category_rank = 2
+    else:
+        category_rank = 3
     snapshot_rank = 0 if is_snapshot else 1
     version_rank: tuple[int, int] | tuple[str, str]
     if version_tuple is not None:
@@ -56,6 +65,8 @@ def dataset_label(dataset_id: str) -> str:
         return f"Linux {dataset_id[len('linux_') :]}"
     if dataset_id.startswith("openwrt_"):
         return f"OpenWrt {dataset_id[len('openwrt_') :]}"
+    if dataset_id.startswith("microchip-ung_"):
+        return f"Microchip-UNG {dataset_id[len('microchip-ung_') :]}"
     return dataset_id
 
 
