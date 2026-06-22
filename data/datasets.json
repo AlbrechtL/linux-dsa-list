@@ -1,6 +1,12 @@
 {
   "datasets": [
     {
+      "id": "linux_7.1",
+      "label": "Linux 7.1",
+      "feature": "dsa_feature_matrix_linux_7.1.csv",
+      "chip": "dsa_driver_chip_list_linux_7.1.csv"
+    },
+    {
       "id": "linux_7.0",
       "label": "Linux 7.0",
       "feature": "dsa_feature_matrix_linux_7.0.csv",
